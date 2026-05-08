@@ -1,0 +1,15 @@
+.env
+__pycache__/
+*.pyc
+node_modules/
+.next/
+.serverless/
+.DS_Store
+dist/
+CLAUDE.md
+DESIGN.md
+AGENTS.md
+.gitnexus/
+.claude/
+venv/
+*.egg-info/
