@@ -1,0 +1,72 @@
+service: scholarmind
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: python3.12
+  region: us-east-1
+  memorySize: 1024
+  timeout: 30
+  environment:
+    OPENAI_API_KEY: ${env:OPENAI_API_KEY}
+    SUPABASE_URL: ${env:SUPABASE_URL}
+    SUPABASE_KEY: ${env:SUPABASE_KEY}
+    DATABASE_URL: ${env:DATABASE_URL}
+    AWS_S3_BUCKET: ${env:AWS_S3_BUCKET}
+    LANGCHAIN_API_KEY: ${env:LANGCHAIN_API_KEY}
+    LANGCHAIN_PROJECT: scholarmind
+    LANGCHAIN_TRACING_V2: 'true'
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - s3:GetObject
+        - s3:PutObject
+        - s3:DeleteObject
+      Resource: arn:aws:s3:::${env:AWS_S3_BUCKET}/*
+
+plugins:
+  - serverless-python-requirements
+
+custom:
+  pythonRequirements:
+    dockerizePip: non-linux
+    slim: true
+    strip: false
+
+functions:
+  upload:
+    handler: src/handlers/upload.handler
+    events:
+      - http:
+          path: /upload
+          method: post
+          cors: true
+
+  query:
+    handler: src/handlers/query.handler
+    events:
+      - http:
+          path: /query
+          method: post
+          cors: true
+
+  quiz:
+    handler: src/handlers/quiz.handler
+    events:
+      - http:
+          path: /quiz
+          method: post
+          cors: true
+
+  graphql:
+    handler: src/handlers/graphql.handler
+    events:
+      - http:
+          path: /graphql
+          method: post
+          cors: true
+      - http:
+          path: /graphql
+          method: get
+          cors: true
