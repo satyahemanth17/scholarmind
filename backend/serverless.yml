@@ -1,6 +1,6 @@
 service: scholarmind
 
-frameworkVersion: '3'
+frameworkVersion: '>=3'
 
 provider:
   name: aws
@@ -11,8 +11,7 @@ provider:
   environment:
     OPENAI_API_KEY: ${env:OPENAI_API_KEY}
     SUPABASE_URL: ${env:SUPABASE_URL}
-    SUPABASE_KEY: ${env:SUPABASE_KEY}
-    DATABASE_URL: ${env:DATABASE_URL}
+    SUPABASE_KEY: ${env:SUPABASE_SERVICE_KEY}
     AWS_S3_BUCKET: ${env:AWS_S3_BUCKET}
     LANGCHAIN_API_KEY: ${env:LANGCHAIN_API_KEY}
     LANGCHAIN_PROJECT: scholarmind
