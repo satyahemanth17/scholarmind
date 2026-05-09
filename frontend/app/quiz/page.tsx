@@ -17,9 +17,11 @@ export default function QuizPage() {
   const [savedDocs, setSavedDocs] = useState<SavedDoc[]>([]);
   const [documentId, setDocumentId] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [score, setScore] = useState({ correct: 0, total: 0 });
+  const [quizKey, setQuizKey] = useState(0);
 
   useEffect(() => {
     try {
@@ -38,6 +40,7 @@ export default function QuizPage() {
     setError(null);
     setQuestions([]);
     setScore({ correct: 0, total: 0 });
+    setQuizKey((k) => k + 1);
     try {
       const result = await generateQuiz(documentId.trim(), USER_ID, 5);
       setQuestions(result.questions);
@@ -46,6 +49,26 @@ export default function QuizPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleMoreQuestions() {
+    if (!documentId.trim()) return;
+    setLoadingMore(true);
+    setError(null);
+    try {
+      const result = await generateQuiz(documentId.trim(), USER_ID, 5);
+      setQuestions((prev) => [...prev, ...result.questions]);
+    } catch {
+      setError('Failed to generate more questions.');
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  function handleRetake() {
+    setScore({ correct: 0, total: 0 });
+    setQuizKey((k) => k + 1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function handleAnswer(correct: boolean) {
@@ -67,9 +90,19 @@ export default function QuizPage() {
             <p className="text-[#9ca3af] text-xs mt-0.5">Test your knowledge</p>
           </div>
         </div>
-        <a href="/" className="text-sm text-[#9ca3af] hover:text-[#3ecf8e] transition-colors">
-          ← Chat
-        </a>
+        <div className="flex items-center gap-3">
+          {questions.length > 0 && (
+            <button
+              onClick={handleRetake}
+              className="text-sm text-[#9ca3af] hover:text-white border border-[#2a2d3e] hover:border-[#3ecf8e]/40 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+            >
+              Retake
+            </button>
+          )}
+          <a href="/" className="text-sm text-[#9ca3af] hover:text-[#3ecf8e] transition-colors">
+            ← Chat
+          </a>
+        </div>
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-8 space-y-6">
@@ -84,7 +117,7 @@ export default function QuizPage() {
                   <button
                     key={doc.documentId}
                     onClick={() => setDocumentId(doc.documentId)}
-                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors cursor-pointer ${
                       documentId === doc.documentId
                         ? 'bg-[#3ecf8e]/10 border-[#3ecf8e]/40 text-[#3ecf8e]'
                         : 'border-[#2a2d3e] text-[#9ca3af] hover:border-[#3ecf8e]/30 hover:text-white'
@@ -110,7 +143,7 @@ export default function QuizPage() {
               <button
                 onClick={handleGenerate}
                 disabled={loading || !documentId.trim()}
-                className="bg-[#3ecf8e] text-[#0f1117] font-semibold px-4 py-2 rounded-lg text-sm hover:bg-[#34b87a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                className="bg-[#3ecf8e] text-[#0f1117] font-semibold px-4 py-2 rounded-lg text-sm hover:bg-[#34b87a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shrink-0"
               >
                 {loading ? 'Generating...' : 'Generate Quiz'}
               </button>
@@ -131,22 +164,29 @@ export default function QuizPage() {
 
         <div className="space-y-4">
           {questions.map((q, i) => (
-            <QuizCard key={i} question={q} index={i} onAnswer={handleAnswer} />
+            <QuizCard key={`${quizKey}-${i}`} question={q} index={i} onAnswer={handleAnswer} />
           ))}
         </div>
 
         {score.total === questions.length && questions.length > 0 && (
-          <div className="bg-[#1c1e2e] border border-[#3ecf8e]/30 rounded-xl p-5 text-center">
+          <div className="bg-[#1c1e2e] border border-[#3ecf8e]/30 rounded-xl p-5 text-center space-y-3">
             <p className="text-[#3ecf8e] font-semibold text-lg">
               {score.correct}/{questions.length} correct
             </p>
-            <p className="text-[#9ca3af] text-sm mt-1">
+            <p className="text-[#9ca3af] text-sm">
               {score.correct === questions.length
                 ? 'Perfect score!'
                 : score.correct >= questions.length * 0.7
                 ? 'Great job!'
                 : 'Keep studying!'}
             </p>
+            <button
+              onClick={handleMoreQuestions}
+              disabled={loadingMore}
+              className="mt-1 bg-[#1c1e2e] border border-[#3ecf8e]/40 text-[#3ecf8e] text-sm font-medium px-5 py-2 rounded-lg hover:bg-[#3ecf8e]/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              {loadingMore ? 'Generating...' : '+ More Questions'}
+            </button>
           </div>
         )}
       </main>

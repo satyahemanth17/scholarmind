@@ -34,42 +34,45 @@ class QuizRequest(BaseModel):
 
 @app.post("/quiz")
 async def generate_quiz(req: QuizRequest):
-    # Fetch document chunks from Supabase
-    supabase = _get_supabase()
-    result = (
-        supabase.table("chunks")
-        .select("content")
-        .eq("document_id", req.document_id)
-        .execute()
-    )
-    rows = result.data or []
-    context = "\n\n".join(r["content"] for r in rows)
-
-    # Build prompt for quiz generation
-    prompt = (
-        f"Generate {req.num_questions} multiple-choice questions from this text. "
-        "Return a JSON array only (no markdown, no explanation) with this structure: "
-        '[{"question": "...", "options": ["A) ...", "B) ...", "C) ...", "D) ..."], "answer": "A) ..."}]. '
-        f"Text:\n{context}"
-    )
-
-    llm = _get_llm()
-    response = llm.invoke([HumanMessage(content=prompt)])
-    raw = response.content.strip()
-
-    # Strip markdown code fences if present
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-        raw = raw.strip()
-
     try:
-        questions = json.loads(raw)
-    except json.JSONDecodeError:
-        questions = []
+        supabase = _get_supabase()
+        result = (
+            supabase.table("chunks")
+            .select("content")
+            .eq("document_id", req.document_id)
+            .execute()
+        )
+        rows = result.data or []
+        context = "\n\n".join(r["content"] for r in rows)
 
-    return JSONResponse({"questions": questions})
+        prompt = (
+            f"Generate {req.num_questions} multiple-choice questions from this text. "
+            "Return a JSON array only (no markdown, no text outside the JSON) with this exact structure: "
+            '[{"question": "...", "options": ["option text only", "option text only", "option text only", "option text only"], '
+            '"answer": "exact option text that is correct (must match one option exactly)", '
+            '"explanation": "Why this answer is correct: ..."}]. '
+            "Do NOT include letter prefixes (A), B), etc.) in options or answer — plain text only. "
+            f"Text:\n{context}"
+        )
+
+        llm = _get_llm()
+        response = llm.invoke([HumanMessage(content=prompt)])
+        raw = response.content.strip()
+
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
+
+        try:
+            questions = json.loads(raw)
+        except json.JSONDecodeError:
+            questions = []
+
+        return JSONResponse({"questions": questions})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 handler = Mangum(app)

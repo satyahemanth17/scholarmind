@@ -18,6 +18,11 @@ export default function QuizCard({ question, index, onAnswer }: Props) {
     onAnswer?.(opt === question.answer);
   }
 
+  // Strip leading "A) " / "A. " prefixes in case the backend included them
+  function displayText(opt: string) {
+    return opt.replace(/^[A-Da-d][.)]\s*/, '');
+  }
+
   return (
     <div className="bg-[#1c1e2e] border border-[#2a2d3e] rounded-lg p-5">
       <div className="flex items-center gap-2 mb-3">
@@ -44,18 +49,25 @@ export default function QuizCard({ question, index, onAnswer }: Props) {
               key={opt}
               onClick={() => handleSelect(opt)}
               disabled={!!selected}
-              className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-colors ${optClass}`}
+              className={`w-full text-left px-4 py-2.5 rounded-lg text-sm transition-colors cursor-pointer disabled:cursor-default ${optClass}`}
             >
               <span className="font-mono font-bold mr-2">{label}.</span>
-              {opt}
+              {displayText(opt)}
             </button>
           );
         })}
       </div>
       {selected && (
-        <p className={`mt-3 text-xs font-medium ${selected === question.answer ? 'text-[#3ecf8e]' : 'text-red-400'}`}>
-          {selected === question.answer ? 'Correct!' : `Incorrect — answer: ${question.answer}`}
-        </p>
+        <>
+          <p className={`mt-3 text-xs font-medium ${selected === question.answer ? 'text-[#3ecf8e]' : 'text-red-400'}`}>
+            {selected === question.answer ? 'Correct!' : `Incorrect — answer: ${displayText(question.answer)}`}
+          </p>
+          {question.explanation && (
+            <p className="mt-2 text-xs text-[#9ca3af] bg-[#0f1117] border border-[#2a2d3e] rounded-lg px-3 py-2 leading-relaxed">
+              {question.explanation}
+            </p>
+          )}
+        </>
       )}
     </div>
   );

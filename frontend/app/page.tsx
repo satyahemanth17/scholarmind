@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Copy, Check } from 'lucide-react';
 import DocumentUpload from '@/components/DocumentUpload';
 import ChatWindow from '@/components/ChatWindow';
 import { UploadResult } from '@/lib/api';
@@ -17,6 +18,7 @@ interface UploadedDoc {
 export default function Home() {
   const [docs, setDocs] = useState<UploadedDoc[]>([]);
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -53,6 +55,15 @@ export default function Home() {
     }
   }
 
+  async function handleCopyId(e: React.MouseEvent, id: string) {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(id);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {}
+  }
+
   return (
     <div className="min-h-screen bg-[#0f1117] flex flex-col">
       <header className="border-b border-[#2a2d3e] px-6 py-4 flex items-center justify-between">
@@ -84,7 +95,7 @@ export default function Home() {
                   <div key={doc.documentId} className="relative group">
                     <button
                       onClick={() => setActiveDocId(doc.documentId)}
-                      className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors pr-8 ${
+                      className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors pr-8 cursor-pointer ${
                         activeDocId === doc.documentId
                           ? 'bg-[#3ecf8e]/10 text-[#3ecf8e] border border-[#3ecf8e]/30'
                           : 'text-[#9ca3af] hover:bg-[#1c1e2e] hover:text-white border border-transparent'
@@ -92,14 +103,27 @@ export default function Home() {
                     >
                       <p className="font-medium truncate">{doc.filename}</p>
                       <p className="text-xs opacity-60 mt-0.5">{doc.chunkCount} chunks</p>
-                      <span className="mt-1.5 inline-block font-mono text-[10px] bg-[#0f1117] border border-[#2a2d3e] rounded px-1.5 py-0.5 text-[#9ca3af] truncate max-w-full">
-                        {doc.documentId}
-                      </span>
+                      <div className="flex items-center gap-1 mt-1.5">
+                        <span className="font-mono text-[10px] bg-[#0f1117] border border-[#2a2d3e] rounded px-1.5 py-0.5 text-[#9ca3af] truncate cursor-text select-text">
+                          {doc.documentId}
+                        </span>
+                        <button
+                          onClick={(e) => handleCopyId(e, doc.documentId)}
+                          title="Copy UUID"
+                          className="shrink-0 p-0.5 text-[#9ca3af] hover:text-[#3ecf8e] transition-colors cursor-pointer"
+                        >
+                          {copiedId === doc.documentId ? (
+                            <Check className="w-3 h-3 text-[#3ecf8e]" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
+                        </button>
+                      </div>
                     </button>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDelete(doc.documentId); }}
                       title="Remove"
-                      className="absolute top-2 right-2 w-5 h-5 rounded flex items-center justify-center text-[#9ca3af] hover:text-red-400 hover:bg-red-400/10 opacity-0 group-hover:opacity-100 transition-all"
+                      className="absolute top-2 right-2 w-5 h-5 rounded flex items-center justify-center text-[#9ca3af] hover:text-red-400 hover:bg-red-400/10 opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
                     >
                       <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                         <path d="M1 1l10 10M11 1L1 11" />
