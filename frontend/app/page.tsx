@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import DocumentUpload from '@/components/DocumentUpload';
 import ChatWindow from '@/components/ChatWindow';
 import { UploadResult } from '@/lib/api';
 
 const USER_ID = 'demo-user';
+const STORAGE_KEY = 'scholarmind_docs';
 
 interface UploadedDoc {
   documentId: string;
@@ -17,6 +18,23 @@ export default function Home() {
   const [docs, setDocs] = useState<UploadedDoc[]>([]);
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
 
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved) as UploadedDoc[];
+        setDocs(parsed);
+        if (parsed.length > 0) setActiveDocId(parsed[0].documentId);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(docs));
+    } catch {}
+  }, [docs]);
+
   function handleUploadSuccess(result: UploadResult, filename: string) {
     const doc: UploadedDoc = {
       documentId: result.document_id,
@@ -25,6 +43,14 @@ export default function Home() {
     };
     setDocs((prev) => [doc, ...prev]);
     setActiveDocId(result.document_id);
+  }
+
+  function handleDelete(docId: string) {
+    const updated = docs.filter((d) => d.documentId !== docId);
+    setDocs(updated);
+    if (activeDocId === docId) {
+      setActiveDocId(updated[0]?.documentId ?? null);
+    }
   }
 
   return (
@@ -55,18 +81,31 @@ export default function Home() {
               </p>
               <div className="space-y-1.5">
                 {docs.map((doc) => (
-                  <button
-                    key={doc.documentId}
-                    onClick={() => setActiveDocId(doc.documentId)}
-                    className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors ${
-                      activeDocId === doc.documentId
-                        ? 'bg-[#3ecf8e]/10 text-[#3ecf8e] border border-[#3ecf8e]/30'
-                        : 'text-[#9ca3af] hover:bg-[#1c1e2e] hover:text-white border border-transparent'
-                    }`}
-                  >
-                    <p className="font-medium truncate">{doc.filename}</p>
-                    <p className="text-xs opacity-60 mt-0.5">{doc.chunkCount} chunks</p>
-                  </button>
+                  <div key={doc.documentId} className="relative group">
+                    <button
+                      onClick={() => setActiveDocId(doc.documentId)}
+                      className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors pr-8 ${
+                        activeDocId === doc.documentId
+                          ? 'bg-[#3ecf8e]/10 text-[#3ecf8e] border border-[#3ecf8e]/30'
+                          : 'text-[#9ca3af] hover:bg-[#1c1e2e] hover:text-white border border-transparent'
+                      }`}
+                    >
+                      <p className="font-medium truncate">{doc.filename}</p>
+                      <p className="text-xs opacity-60 mt-0.5">{doc.chunkCount} chunks</p>
+                      <span className="mt-1.5 inline-block font-mono text-[10px] bg-[#0f1117] border border-[#2a2d3e] rounded px-1.5 py-0.5 text-[#9ca3af] truncate max-w-full">
+                        {doc.documentId}
+                      </span>
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDelete(doc.documentId); }}
+                      title="Remove"
+                      className="absolute top-2 right-2 w-5 h-5 rounded flex items-center justify-center text-[#9ca3af] hover:text-red-400 hover:bg-red-400/10 opacity-0 group-hover:opacity-100 transition-all"
+                    >
+                      <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                        <path d="M1 1l10 10M11 1L1 11" />
+                      </svg>
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>

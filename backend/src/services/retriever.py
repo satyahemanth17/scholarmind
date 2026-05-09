@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 from functools import lru_cache
 from supabase import create_client, Client
 
@@ -12,6 +13,7 @@ def similaritySearch(
     query_embedding: list[float],
     user_id: str,
     match_count: int = 5,
+    document_id: Optional[str] = None,
 ) -> list[dict]:
     client = _get_client()
     result = client.rpc(
@@ -23,4 +25,7 @@ def similaritySearch(
             "filter_user_id": user_id,
         },
     ).execute()
-    return result.data or []
+    rows = result.data or []
+    if document_id:
+        rows = [r for r in rows if r.get("document_id") == document_id]
+    return rows

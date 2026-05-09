@@ -32,7 +32,7 @@ export default function ChatWindow({ userId, documentId }: Props) {
     setInput('');
     setLoading(true);
     try {
-      const result = await queryDocuments(input, userId);
+      const result = await queryDocuments(input, userId, documentId ?? undefined);
       setMessages((prev) => [
         ...prev,
         { role: 'assistant', content: result.answer, citations: result.citations },
