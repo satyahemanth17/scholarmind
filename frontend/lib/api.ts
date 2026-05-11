@@ -38,11 +38,20 @@ export async function uploadDocument(file: File, userId: string): Promise<Upload
   return res.json();
 }
 
-export async function queryDocuments(query: string, userId: string, documentId?: string): Promise<QueryResult> {
+export async function queryDocuments(
+  query: string,
+  userId: string,
+  documentIds: string[] = [],
+): Promise<QueryResult> {
   const res = await fetch(`${API_BASE}/query`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, user_id: userId, document_id: documentId ?? null }),
+    body: JSON.stringify({
+      query,
+      user_id: userId,
+      document_ids: documentIds.length > 0 ? documentIds : null,
+      document_id: documentIds.length === 1 ? documentIds[0] : null,
+    }),
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));

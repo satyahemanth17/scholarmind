@@ -12,8 +12,8 @@ export default function ScholarMindLogo({ size = 64 }: { size?: number }) {
     >
       <defs>
         <linearGradient id="smGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#3ecf8e" />
-          <stop offset="100%" stopColor="#1a9e6a" />
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="100%" stopColor="#888888" />
         </linearGradient>
         <style>{`
           @keyframes sm-spin {
@@ -43,7 +43,7 @@ export default function ScholarMindLogo({ size = 64 }: { size?: number }) {
         `}</style>
       </defs>
 
-      {/* Outer organic ring — three rounded petals */}
+      {/* Outer organic ring */}
       <g className="sm-outer">
         <path
           d="M32 6 C44 6 56 18 54 30 C52 42 44 52 32 54 C20 56 8 46 8 34 C8 22 18 8 32 6 Z"
@@ -78,7 +78,7 @@ export default function ScholarMindLogo({ size = 64 }: { size?: number }) {
         <path
           d="M20 24 C26 16 42 18 46 28 C50 38 44 50 34 52"
           fill="none"
-          stroke="#3ecf8e"
+          stroke="#aaaaaa"
           strokeWidth="1.5"
           strokeLinecap="round"
           opacity="0.4"
@@ -90,7 +90,7 @@ export default function ScholarMindLogo({ size = 64 }: { size?: number }) {
         <circle cx="32" cy="32" r="6" fill="url(#smGrad)" opacity="0.9" />
         <circle cx="32" cy="32" r="3" fill="#ffffff" opacity="0.4" />
         {/* Small orbiting accent */}
-        <circle cx="32" cy="22" r="2.5" fill="#3ecf8e" opacity="0.7" />
+        <circle cx="32" cy="22" r="2.5" fill="#ffffff" opacity="0.7" />
       </g>
     </svg>
   );

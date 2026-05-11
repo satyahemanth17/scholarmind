@@ -50,9 +50,9 @@ export default function DocumentUpload({ userId, onUploadSuccess }: Props) {
       onDrop={onDrop}
       onClick={() => !uploading && inputRef.current?.click()}
       className={`
-        bg-[#1c1e2e] border-2 border-dashed rounded-xl p-8 text-center cursor-pointer
+        bg-[#141414] border-2 border-dashed rounded-xl p-8 text-center cursor-pointer
         transition-colors select-none
-        ${dragOver ? 'border-[#3ecf8e] bg-[#3ecf8e]/5' : 'border-[#2a2d3e] hover:border-[#3ecf8e]/50'}
+        ${dragOver ? 'border-white bg-white/5' : 'border-[#2a2a2a] hover:border-white/30'}
         ${uploading ? 'pointer-events-none opacity-70' : ''}
       `}
     >
@@ -64,11 +64,11 @@ export default function DocumentUpload({ userId, onUploadSuccess }: Props) {
         onChange={onInputChange}
       />
       <div className="flex flex-col items-center gap-3">
-        <svg className={`w-10 h-10 ${dragOver ? 'text-[#3ecf8e]' : 'text-[#9ca3af]'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg className={`w-10 h-10 ${dragOver ? 'text-white' : 'text-[#6b6b6b]'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
         </svg>
         {uploading ? (
-          <div className="flex items-center gap-2 text-[#3ecf8e]">
+          <div className="flex items-center gap-2 text-white">
             <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -78,7 +78,7 @@ export default function DocumentUpload({ userId, onUploadSuccess }: Props) {
         ) : (
           <>
             <p className="text-sm text-white font-medium">Drop PDF here or click to upload</p>
-            <p className="text-xs text-[#9ca3af]">PDF files only</p>
+            <p className="text-xs text-[#6b6b6b]">PDF files only</p>
           </>
         )}
         {error && <p className="text-xs text-red-400 mt-1">{error}</p>}

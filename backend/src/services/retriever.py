@@ -12,23 +12,28 @@ def _get_client() -> Client:
 def similaritySearch(
     query_embedding: list[float],
     user_id: str,
-    match_count: int = 5,
+    match_count: int = 10,
     document_id: Optional[str] = None,
+    document_ids: Optional[list[str]] = None,
 ) -> list[dict]:
     client = _get_client()
+    # Fetch extra rows to compensate for post-fetch document filtering
+    target_ids = document_ids or ([document_id] if document_id else None)
+    fetch_count = match_count * 4 if target_ids else match_count
     result = client.rpc(
         "match_chunks",
         {
             "query_embedding": query_embedding,
             "match_threshold": 0.3,
-            "match_count": match_count,
+            "match_count": fetch_count,
             "filter_user_id": user_id,
         },
     ).execute()
     rows = result.data or []
-    if document_id:
-        rows = [r for r in rows if r.get("document_id") == document_id]
-    return rows
+    if target_ids:
+        doc_set = set(str(d) for d in target_ids)
+        rows = [r for r in rows if str(r.get("document_id", "")) in doc_set]
+    return rows[:match_count]
 
 
 def fetchDocumentChunks(document_id: str, limit: int = 30) -> list[dict]:

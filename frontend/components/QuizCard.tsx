@@ -25,15 +25,14 @@ export default function QuizCard({ question, index, onAnswer, selectedAnswer: co
     onAnswer?.(opt === question.answer);
   }
 
-  // Strip leading "A) " / "A. " prefixes in case the backend included them
   function displayText(opt: string) {
     return opt.replace(/^[A-Da-d][.)]\s*/, '');
   }
 
   return (
-    <div className="bg-[#1c1e2e] border border-[#2a2d3e] rounded-lg p-5">
+    <div className="bg-[#141414] border border-[#2a2a2a] rounded-lg p-5">
       <div className="flex items-center gap-2 mb-3">
-        <span className="bg-[#3ecf8e]/20 text-[#3ecf8e] text-xs font-semibold px-2.5 py-0.5 rounded-full">
+        <span className="bg-white/10 text-white text-xs font-semibold px-2.5 py-0.5 rounded-full">
           Q{index + 1}
         </span>
       </div>
@@ -44,11 +43,11 @@ export default function QuizCard({ question, index, onAnswer, selectedAnswer: co
           const isCorrect = opt === question.answer;
           const isSelected = selected === opt;
 
-          let optClass = 'border border-[#2a2d3e] text-[#9ca3af] hover:border-[#3ecf8e] hover:text-white';
+          let optClass = 'border border-[#2a2a2a] text-[#6b6b6b] hover:border-white/40 hover:text-white';
           if (selected) {
-            if (isCorrect) optClass = 'border border-[#3ecf8e] bg-[#3ecf8e]/10 text-[#3ecf8e]';
+            if (isCorrect) optClass = 'border border-white bg-white/10 text-white';
             else if (isSelected) optClass = 'border border-red-500 bg-red-500/10 text-red-400';
-            else optClass = 'border border-[#2a2d3e] text-[#9ca3af] opacity-50';
+            else optClass = 'border border-[#2a2a2a] text-[#6b6b6b] opacity-50';
           }
 
           return (
@@ -66,11 +65,11 @@ export default function QuizCard({ question, index, onAnswer, selectedAnswer: co
       </div>
       {selected && (
         <>
-          <p className={`mt-3 text-xs font-medium ${selected === question.answer ? 'text-[#3ecf8e]' : 'text-red-400'}`}>
+          <p className={`mt-3 text-xs font-medium ${selected === question.answer ? 'text-white' : 'text-red-400'}`}>
             {selected === question.answer ? 'Correct!' : `Incorrect — answer: ${displayText(question.answer)}`}
           </p>
           {question.explanation && (
-            <p className="mt-2 text-xs text-[#9ca3af] bg-[#0f1117] border border-[#2a2d3e] rounded-lg px-3 py-2 leading-relaxed">
+            <p className="mt-2 text-xs text-[#6b6b6b] bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg px-3 py-2 leading-relaxed">
               {question.explanation}
             </p>
           )}

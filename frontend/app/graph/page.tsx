@@ -70,7 +70,7 @@ export default function GraphPage() {
     const ctx = canvas.getContext('2d')!;
     const img = new Image();
     img.onload = () => {
-      ctx.fillStyle = '#0f1117';
+      ctx.fillStyle = '#0a0a0a';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0);
       canvas.toBlob((blob) => {
@@ -97,34 +97,34 @@ export default function GraphPage() {
   const initials = auth.username.slice(0, 2).toUpperCase();
 
   return (
-    <div className="min-h-screen bg-[#0f1117] flex flex-col">
-      <header className="border-b border-[#2a2d3e] px-6 py-4 flex items-center justify-between shrink-0">
+    <div className="min-h-screen bg-[#0a0a0a] flex flex-col">
+      <header className="border-b border-[#2a2a2a] px-6 py-4 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <ScholarMindLogo size={32} />
           <div>
             <h1 className="text-white font-semibold text-lg leading-none">Knowledge Graph</h1>
-            <p className="text-[#9ca3af] text-xs mt-0.5">Concept map from your documents</p>
+            <p className="text-[#6b6b6b] text-xs mt-0.5">Concept map from your documents</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <a href="/" className="text-sm text-[#9ca3af] hover:text-[#3ecf8e] transition-colors">← Chat</a>
-          <div className="flex items-center gap-2 pl-3 border-l border-[#2a2d3e]">
+          <a href="/" className="text-sm text-[#6b6b6b] hover:text-white transition-colors">← Chat</a>
+          <div className="flex items-center gap-2 pl-3 border-l border-[#2a2a2a]">
             {auth.avatarUrl ? (
               <img src={auth.avatarUrl} alt={auth.username} className="w-7 h-7 rounded-full" />
             ) : (
-              <div className="w-7 h-7 rounded-full bg-[#3ecf8e]/20 flex items-center justify-center">
-                <span className="text-[#3ecf8e] text-xs font-semibold">{initials}</span>
+              <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center">
+                <span className="text-white text-xs font-semibold">{initials}</span>
               </div>
             )}
             <span className="text-sm text-white">{auth.username}</span>
-            <button onClick={handleLogout} title="Log out" className="p-1.5 rounded-lg text-[#9ca3af] hover:text-red-400 hover:bg-red-400/10 transition-colors cursor-pointer">
+            <button onClick={handleLogout} title="Log out" className="p-1.5 rounded-lg text-[#6b6b6b] hover:text-red-400 hover:bg-red-400/10 transition-colors cursor-pointer">
               <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>
       </header>
 
-      <div className="px-6 py-3 border-b border-[#2a2d3e] flex items-center gap-3 shrink-0 flex-wrap">
+      <div className="px-6 py-3 border-b border-[#2a2a2a] flex items-center gap-3 shrink-0 flex-wrap">
         {docs.length > 0 ? (
           <>
             <div className="flex flex-wrap gap-2 flex-1">
@@ -134,8 +134,8 @@ export default function GraphPage() {
                   onClick={() => setSelectedDoc(doc.documentId)}
                   className={`text-xs px-3 py-1.5 rounded-full border transition-colors cursor-pointer ${
                     selectedDoc === doc.documentId
-                      ? 'bg-[#3ecf8e]/10 border-[#3ecf8e]/40 text-[#3ecf8e]'
-                      : 'border-[#2a2d3e] text-[#9ca3af] hover:border-[#3ecf8e]/30 hover:text-white'
+                      ? 'bg-white/10 border-white/30 text-white'
+                      : 'border-[#2a2a2a] text-[#6b6b6b] hover:border-white/20 hover:text-white'
                   }`}
                 >
                   {doc.filename}
@@ -146,7 +146,7 @@ export default function GraphPage() {
               {graphData && (
                 <button
                   onClick={handleExport}
-                  className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border border-[#2a2d3e] text-[#9ca3af] hover:text-white hover:border-[#3ecf8e]/30 transition-colors cursor-pointer"
+                  className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border border-[#2a2a2a] text-[#6b6b6b] hover:text-white hover:border-white/20 transition-colors cursor-pointer"
                 >
                   <Download className="w-3.5 h-3.5" />
                   Export PNG
@@ -155,7 +155,7 @@ export default function GraphPage() {
               <button
                 onClick={handleGenerate}
                 disabled={loading || !selectedDoc}
-                className="flex items-center gap-1.5 text-sm px-4 py-1.5 rounded-lg bg-[#3ecf8e] text-[#0f1117] font-semibold hover:bg-[#34b87a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                className="flex items-center gap-1.5 text-sm px-4 py-1.5 rounded-lg bg-white text-[#0a0a0a] font-semibold hover:bg-[#e5e5e5] transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
               >
                 <Zap className="w-3.5 h-3.5" />
                 {loading ? 'Generating...' : graphData ? 'Regenerate' : 'Generate Graph'}
@@ -163,15 +163,15 @@ export default function GraphPage() {
             </div>
           </>
         ) : (
-          <p className="text-[#9ca3af] text-sm">Upload a document on the Chat page first.</p>
+          <p className="text-[#6b6b6b] text-sm">Upload a document on the Chat page first.</p>
         )}
         {error && <p className="w-full text-red-400 text-xs">{error}</p>}
       </div>
 
       {graphData && (
-        <div className="px-6 py-2 border-b border-[#2a2d3e] flex items-center gap-4 shrink-0">
-          <span className="text-[#9ca3af] text-xs">{graphData.nodes.length} concepts · {graphData.edges.length} relationships</span>
-          <span className="text-[#9ca3af] text-xs">Scroll to zoom · Drag to pan · Click node to explore</span>
+        <div className="px-6 py-2 border-b border-[#2a2a2a] flex items-center gap-4 shrink-0">
+          <span className="text-[#6b6b6b] text-xs">{graphData.nodes.length} concepts · {graphData.edges.length} relationships</span>
+          <span className="text-[#6b6b6b] text-xs">Scroll to zoom · Drag to pan · Click node to explore</span>
         </div>
       )}
 

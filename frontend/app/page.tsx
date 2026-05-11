@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Copy, Check, LogOut, Network, TrendingUp } from 'lucide-react';
+import { LogOut, Network, TrendingUp } from 'lucide-react';
 import DocumentUpload from '@/components/DocumentUpload';
 import ChatWindow from '@/components/ChatWindow';
 import KnowledgeGraph from '@/components/KnowledgeGraph';
@@ -22,12 +22,14 @@ export default function Home() {
   const router = useRouter();
   const [auth, setAuth] = useState<AuthState | null>(null);
   const [docs, setDocs] = useState<UploadedDoc[]>([]);
-  const [activeDocId, setActiveDocId] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<ActiveTab>('chat');
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const [graphCache, setGraphCache] = useState<Record<string, GraphData>>({});
   const [graphLoading, setGraphLoading] = useState(false);
+
+  const activeDocId = selectedDocIds[0] ?? null;
+  const activeDocName = docs.find((d) => d.documentId === activeDocId)?.filename;
 
   useEffect(() => {
     const currentAuth = getAuth();
@@ -51,7 +53,7 @@ export default function Home() {
       if (saved) {
         const parsed = JSON.parse(saved) as UploadedDoc[];
         setDocs(parsed);
-        if (parsed.length > 0) setActiveDocId(parsed[0].documentId);
+        if (parsed.length > 0) setSelectedDocIds([parsed[0].documentId]);
 
         const cachedGraphs: Record<string, GraphData> = {};
         parsed.forEach((doc) => {
@@ -79,16 +81,14 @@ export default function Home() {
       chunkCount: result.chunk_count,
     };
     setDocs((prev) => [doc, ...prev]);
-    setActiveDocId(result.document_id);
+    setSelectedDocIds((prev) => [result.document_id, ...prev]);
     setActiveTab('chat');
   }
 
-  function handleDelete(docId: string) {
+  function handleDeleteDoc(docId: string) {
     const updated = docs.filter((d) => d.documentId !== docId);
     setDocs(updated);
-    if (activeDocId === docId) {
-      setActiveDocId(updated[0]?.documentId ?? null);
-    }
+    setSelectedDocIds((prev) => prev.filter((id) => id !== docId));
     setGraphCache((prev) => {
       const next = { ...prev };
       delete next[docId];
@@ -101,13 +101,10 @@ export default function Home() {
     } catch {}
   }
 
-  async function handleCopyId(e: React.MouseEvent, id: string) {
-    e.stopPropagation();
-    try {
-      await navigator.clipboard.writeText(id);
-      setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 2000);
-    } catch {}
+  function handleToggleDoc(docId: string) {
+    setSelectedDocIds((prev) =>
+      prev.includes(docId) ? prev.filter((id) => id !== docId) : [...prev, docId]
+    );
   }
 
   function handleLogout() {
@@ -137,7 +134,6 @@ export default function Home() {
   if (!auth) return null;
 
   const initials = auth.username.slice(0, 2).toUpperCase();
-  const activeDocName = docs.find((d) => d.documentId === activeDocId)?.filename;
 
   const TABS: { id: ActiveTab; label: string; icon?: React.ReactNode }[] = [
     { id: 'chat', label: 'Chat' },
@@ -146,37 +142,37 @@ export default function Home() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#0f1117] flex flex-col">
-      <header className="border-b border-[#2a2d3e] px-6 py-4 flex items-center justify-between shrink-0">
+    <div className="min-h-screen bg-[#0a0a0a] flex flex-col">
+      <header className="border-b border-[#2a2a2a] px-6 py-4 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-[#3ecf8e]/20 flex items-center justify-center">
-            <span className="text-[#3ecf8e] text-sm font-bold">S</span>
+          <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
+            <span className="text-white text-sm font-bold">S</span>
           </div>
           <div>
             <h1 className="text-white font-semibold text-lg leading-none">ScholarMind</h1>
-            <p className="text-[#9ca3af] text-xs mt-0.5">AI Study Assistant</p>
+            <p className="text-[#6b6b6b] text-xs mt-0.5">AI Study Assistant</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <a href="/quiz" className="text-sm text-[#9ca3af] hover:text-[#3ecf8e] transition-colors">
+          <a href="/quiz" className="text-sm text-[#6b6b6b] hover:text-white transition-colors">
             Quiz Mode →
           </a>
-          <a href="/mastery" className="text-sm text-[#9ca3af] hover:text-[#3ecf8e] transition-colors">
+          <a href="/mastery" className="text-sm text-[#6b6b6b] hover:text-white transition-colors">
             All Mastery →
           </a>
-          <div className="flex items-center gap-2 pl-3 border-l border-[#2a2d3e]">
+          <div className="flex items-center gap-2 pl-3 border-l border-[#2a2a2a]">
             {auth.avatarUrl ? (
               <img src={auth.avatarUrl} alt={auth.username} className="w-7 h-7 rounded-full" />
             ) : (
-              <div className="w-7 h-7 rounded-full bg-[#3ecf8e]/20 flex items-center justify-center">
-                <span className="text-[#3ecf8e] text-xs font-semibold">{initials}</span>
+              <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center">
+                <span className="text-white text-xs font-semibold">{initials}</span>
               </div>
             )}
             <span className="text-sm text-white">{auth.username}</span>
             <button
               onClick={handleLogout}
               title="Log out"
-              className="p-1.5 rounded-lg text-[#9ca3af] hover:text-red-400 hover:bg-red-400/10 transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg text-[#6b6b6b] hover:text-red-400 hover:bg-red-400/10 transition-colors cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
             </button>
@@ -185,79 +181,33 @@ export default function Home() {
       </header>
 
       <main className="flex-1 flex gap-0 overflow-hidden" style={{ height: 'calc(100vh - 65px)' }}>
-        {/* Sidebar */}
-        <aside className="w-80 border-r border-[#2a2d3e] flex flex-col p-4 gap-4 overflow-y-auto shrink-0">
+        {/* Sidebar — upload only */}
+        <aside className="w-72 border-r border-[#2a2a2a] flex flex-col p-4 gap-4 shrink-0">
           <DocumentUpload userId={auth.userId} onUploadSuccess={handleUploadSuccess} />
-
+          {docs.length === 0 && (
+            <p className="text-[#6b6b6b] text-xs text-center leading-relaxed px-2">
+              Upload a PDF to start. Manage documents via the pills above the chat input.
+            </p>
+          )}
           {docs.length > 0 && (
-            <div>
-              <p className="text-xs text-[#9ca3af] font-medium uppercase tracking-wider mb-2 px-1">
-                Documents
-              </p>
-              <div className="space-y-1.5">
-                {docs.map((doc) => (
-                  <div key={doc.documentId} className="relative group">
-                    <div
-                      onClick={() => setActiveDocId(doc.documentId)}
-                      role="button"
-                      tabIndex={0}
-                      aria-label={`Select ${doc.filename}`}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') setActiveDocId(doc.documentId);
-                      }}
-                      className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors pr-8 cursor-pointer ${
-                        activeDocId === doc.documentId
-                          ? 'bg-[#3ecf8e]/10 text-[#3ecf8e] border border-[#3ecf8e]/30'
-                          : 'text-[#9ca3af] hover:bg-[#1c1e2e] hover:text-white border border-transparent'
-                      }`}
-                    >
-                      <p className="font-medium truncate">{doc.filename}</p>
-                      <p className="text-xs opacity-60 mt-0.5">{doc.chunkCount} chunks</p>
-                      <div className="flex items-center gap-1 mt-1.5">
-                        <span className="font-mono text-[10px] bg-[#0f1117] border border-[#2a2d3e] rounded px-1.5 py-0.5 text-[#9ca3af] truncate cursor-text select-text">
-                          {doc.documentId}
-                        </span>
-                        <button
-                          onClick={(e) => handleCopyId(e, doc.documentId)}
-                          title="Copy UUID"
-                          className="shrink-0 p-0.5 text-[#9ca3af] hover:text-[#3ecf8e] transition-colors cursor-pointer"
-                        >
-                          {copiedId === doc.documentId ? (
-                            <Check className="w-3 h-3 text-[#3ecf8e]" />
-                          ) : (
-                            <Copy className="w-3 h-3" />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDelete(doc.documentId); }}
-                      title="Remove"
-                      className="absolute top-2 right-2 w-5 h-5 rounded flex items-center justify-center text-[#9ca3af] hover:text-red-400 hover:bg-red-400/10 opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
-                    >
-                      <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                        <path d="M1 1l10 10M11 1L1 11" />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <p className="text-[#6b6b6b] text-xs text-center">
+              {docs.length} document{docs.length !== 1 ? 's' : ''} · select via chat input
+            </p>
           )}
         </aside>
 
         {/* Right panel */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Tab bar */}
-          <div className="px-3 pt-2 shrink-0 flex gap-0.5 border-b border-[#2a2d3e] bg-[#0f1117]">
+          <div className="px-3 pt-2 shrink-0 flex gap-0.5 border-b border-[#2a2a2a] bg-[#0a0a0a]">
             {TABS.map(({ id, label, icon }) => (
               <button
                 key={id}
                 onClick={() => setActiveTab(id)}
                 className={`flex items-center gap-1.5 px-4 py-2 text-sm rounded-t-lg transition-colors cursor-pointer relative ${
                   activeTab === id
-                    ? 'text-white bg-[#1c1e2e] border border-b-[#1c1e2e] border-[#2a2d3e] -mb-px z-10'
-                    : 'text-[#9ca3af] hover:text-white'
+                    ? 'text-white bg-[#141414] border border-b-[#141414] border-[#2a2a2a] -mb-px z-10'
+                    : 'text-[#6b6b6b] hover:text-white'
                 }`}
               >
                 {icon}
@@ -271,9 +221,11 @@ export default function Home() {
             {activeTab === 'chat' && (
               <ChatWindow
                 userId={auth.userId}
-                documentId={activeDocId}
+                docs={docs}
+                selectedDocIds={selectedDocIds}
+                onToggleDoc={handleToggleDoc}
+                onDeleteDoc={handleDeleteDoc}
                 username={auth.username}
-                documentName={activeDocName}
                 pendingMessage={pendingMessage}
                 onPendingConsumed={() => setPendingMessage(null)}
               />
@@ -281,19 +233,19 @@ export default function Home() {
 
             {activeTab === 'graph' && (
               <div
-                className="flex flex-col h-full rounded-xl overflow-hidden border border-[#2a2d3e]"
-                style={{ background: 'linear-gradient(180deg, #0f1117 0%, #13151f 100%)' }}
+                className="flex flex-col h-full rounded-xl overflow-hidden border border-[#2a2a2a]"
+                style={{ background: 'linear-gradient(180deg, #0a0a0a 0%, #111111 100%)' }}
               >
-                <div className="px-4 py-3 border-b border-[#2a2d3e] flex items-center justify-between gap-2 shrink-0">
+                <div className="px-4 py-3 border-b border-[#2a2a2a] flex items-center justify-between gap-2 shrink-0">
                   <div className="flex items-center gap-2">
                     <Network className="w-4 h-4 text-[#6366f1]" />
                     <span className="text-sm font-medium text-white">
                       {activeDocId
                         ? (activeDocName || 'Document loaded')
-                        : 'Upload a document to start'}
+                        : 'Select a document to start'}
                     </span>
                     {activeDocId && graphCache[activeDocId] && (
-                      <span className="text-xs text-[#9ca3af]">
+                      <span className="text-xs text-[#6b6b6b]">
                         · {graphCache[activeDocId].nodes.length} concepts, {graphCache[activeDocId].edges.length} edges
                       </span>
                     )}
@@ -301,7 +253,7 @@ export default function Home() {
                   <div className="flex items-center gap-2">
                     <a
                       href="/graph"
-                      className="text-xs text-[#9ca3af] hover:text-white transition-colors"
+                      className="text-xs text-[#6b6b6b] hover:text-white transition-colors"
                     >
                       Full screen ↗
                     </a>
@@ -332,8 +284,8 @@ export default function Home() {
 
             {activeTab === 'mastery' && (
               <div
-                className="h-full rounded-xl overflow-hidden border border-[#2a2d3e]"
-                style={{ background: 'linear-gradient(180deg, #0f1117 0%, #13151f 100%)' }}
+                className="h-full rounded-xl overflow-hidden border border-[#2a2a2a]"
+                style={{ background: 'linear-gradient(180deg, #0a0a0a 0%, #111111 100%)' }}
               >
                 <MasteryDashboard
                   userId={auth.userId}

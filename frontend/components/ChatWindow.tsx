@@ -1,10 +1,16 @@
 'use client';
 
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
-import { Copy, Check, RefreshCw, ChevronLeft, ChevronRight, SquarePen, Send, FileText } from 'lucide-react';
+import { Copy, Check, RefreshCw, ChevronLeft, ChevronRight, SquarePen, Send, FileText, X, Pencil } from 'lucide-react';
 import { queryDocuments, Citation } from '@/lib/api';
 import CitationCard from './CitationCard';
 import ScholarMindLogo from './ScholarMindLogo';
+
+interface UploadedDoc {
+  documentId: string;
+  filename: string;
+  chunkCount: number;
+}
 
 interface Draft {
   content: string;
@@ -21,68 +27,90 @@ interface Message {
 
 interface Props {
   userId: string;
-  documentId: string | null;
+  docs: UploadedDoc[];
+  selectedDocIds: string[];
+  onToggleDoc: (id: string) => void;
+  onDeleteDoc: (id: string) => void;
   username?: string;
-  documentName?: string;
   pendingMessage?: string | null;
   onPendingConsumed?: () => void;
 }
 
-export default function ChatWindow({ userId, documentId, username, documentName, pendingMessage, onPendingConsumed }: Props) {
+export default function ChatWindow({
+  userId,
+  docs,
+  selectedDocIds,
+  onToggleDoc,
+  onDeleteDoc,
+  username,
+  pendingMessage,
+  onPendingConsumed,
+}: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [copiedUserIndex, setCopiedUserIndex] = useState<number | null>(null);
   const [expandedCitations, setExpandedCitations] = useState<Set<number>>(new Set());
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const loadedForRef = useRef<string | null>(null);
+  const primaryKeyRef = useRef<string | null>(null);
 
   const initials = username ? username.slice(0, 2).toUpperCase() : 'G';
+  const hasDoc = selectedDocIds.length > 0;
+  const primaryDocId = selectedDocIds[0] ?? null;
+  const primaryDocName = docs.find((d) => d.documentId === primaryDocId)?.filename;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
   useEffect(() => {
-    loadedForRef.current = null;
-    if (!documentId) {
+    primaryKeyRef.current = null;
+    if (!primaryDocId) {
       setMessages([]);
       return;
     }
     try {
-      const saved = localStorage.getItem(`scholarmind-chat-${userId}-${documentId}`);
+      const saved = localStorage.getItem(`scholarmind-chat-${userId}-${primaryDocId}`);
       setMessages(saved ? JSON.parse(saved) : []);
     } catch {
       setMessages([]);
     }
-    loadedForRef.current = documentId;
-  }, [documentId, userId]);
+    primaryKeyRef.current = primaryDocId;
+  }, [primaryDocId, userId]);
 
   useEffect(() => {
-    const docId = loadedForRef.current;
-    if (!docId || messages.length === 0) return;
+    const key = primaryKeyRef.current;
+    if (!key || messages.length === 0) return;
     try {
-      localStorage.setItem(`scholarmind-chat-${userId}-${docId}`, JSON.stringify(messages));
+      localStorage.setItem(`scholarmind-chat-${userId}-${key}`, JSON.stringify(messages));
     } catch {}
   }, [messages, userId]);
 
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height =
-        Math.min(textareaRef.current.scrollHeight, 120) + 'px';
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + 'px';
     }
   }, [input]);
 
   async function sendMessage(overrideContent?: string) {
     const query = overrideContent ?? input.trim();
-    if (!query || loading || !documentId) return;
+    if (!query || loading || !hasDoc) return;
     if (!overrideContent) setInput('');
-    setMessages((prev) => [...prev, { role: 'user', content: query }]);
+
+    let baseMessages = messages;
+    if (editingIndex !== null) {
+      baseMessages = messages.slice(0, editingIndex);
+      setEditingIndex(null);
+    }
+
+    setMessages([...baseMessages, { role: 'user', content: query }]);
     setLoading(true);
     try {
-      const result = await queryDocuments(query, userId, documentId ?? undefined);
+      const result = await queryDocuments(query, userId, selectedDocIds);
       const draft: Draft = { content: result.answer, citations: result.citations };
       setMessages((prev) => [
         ...prev,
@@ -106,7 +134,7 @@ export default function ChatWindow({ userId, documentId, username, documentName,
   }
 
   useEffect(() => {
-    if (!pendingMessage || loading || !documentId) return;
+    if (!pendingMessage || loading || !hasDoc) return;
     onPendingConsumed?.();
     sendMessage(pendingMessage);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -116,15 +144,12 @@ export default function ChatWindow({ userId, documentId, username, documentName,
     if (loading) return;
     let userQuery = '';
     for (let i = msgIndex - 1; i >= 0; i--) {
-      if (messages[i].role === 'user') {
-        userQuery = messages[i].content;
-        break;
-      }
+      if (messages[i].role === 'user') { userQuery = messages[i].content; break; }
     }
     if (!userQuery) return;
     setLoading(true);
     try {
-      const result = await queryDocuments(userQuery, userId, documentId ?? undefined);
+      const result = await queryDocuments(userQuery, userId, selectedDocIds);
       const newDraft: Draft = { content: result.answer, citations: result.citations };
       setMessages((prev) =>
         prev.map((msg, i) => {
@@ -153,25 +178,46 @@ export default function ChatWindow({ userId, documentId, username, documentName,
     );
   }
 
-  async function copyMessage(content: string, index: number) {
+  async function copyMessage(content: string, index: number, isUser = false) {
     try {
       await navigator.clipboard.writeText(content);
-      setCopiedIndex(index);
-      setTimeout(() => setCopiedIndex(null), 2000);
+      if (isUser) {
+        setCopiedUserIndex(index);
+        setTimeout(() => setCopiedUserIndex(null), 2000);
+      } else {
+        setCopiedIndex(index);
+        setTimeout(() => setCopiedIndex(null), 2000);
+      }
     } catch {}
   }
 
+  function startEdit(index: number) {
+    setInput(messages[index].content);
+    setEditingIndex(index);
+    textareaRef.current?.focus();
+  }
+
+  function cancelEdit() {
+    setEditingIndex(null);
+    setInput('');
+  }
+
   function handleNewChat() {
-    if (messages.length > 0 && !window.confirm('Clear chat history for this document?')) return;
-    if (documentId) localStorage.removeItem(`scholarmind-chat-${userId}-${documentId}`);
+    if (messages.length > 0 && !window.confirm('Clear chat history?')) return;
+    if (primaryDocId) localStorage.removeItem(`scholarmind-chat-${userId}-${primaryDocId}`);
     setMessages([]);
     setExpandedCitations(new Set());
+    setEditingIndex(null);
+    setInput('');
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
+    }
+    if (e.key === 'Escape' && editingIndex !== null) {
+      cancelEdit();
     }
   }
 
@@ -191,24 +237,31 @@ export default function ChatWindow({ userId, documentId, username, documentName,
     return { content: msg.content, citations: msg.citations };
   }
 
+  const truncateName = (name: string) =>
+    name.length > 20 ? name.slice(0, 20) + '…' : name;
+
   return (
     <div
-      className="flex flex-col h-full rounded-xl overflow-hidden border border-[#2a2d3e]"
-      style={{ background: 'linear-gradient(180deg, #0f1117 0%, #13151f 100%)' }}
+      className="flex flex-col h-full rounded-xl overflow-hidden border border-[#2a2a2a]"
+      style={{ background: 'linear-gradient(180deg, #0a0a0a 0%, #111111 100%)' }}
     >
       {/* Header */}
-      <div className="px-5 py-3 border-b border-[#2a2d3e] flex items-center justify-between gap-2 shrink-0">
+      <div className="px-5 py-3 border-b border-[#2a2a2a] flex items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${documentId ? 'bg-[#3ecf8e]' : 'bg-[#9ca3af]'}`} />
+          <span className={`w-2 h-2 rounded-full ${hasDoc ? 'bg-white' : 'bg-[#2a2a2a]'}`} />
           <span className="text-sm font-medium text-white">
-            {documentId ? (documentName || 'Document loaded') : 'Upload a document to start'}
+            {hasDoc
+              ? selectedDocIds.length === 1
+                ? (primaryDocName || 'Document loaded')
+                : `${selectedDocIds.length} documents selected`
+              : 'Upload or select a document'}
           </span>
         </div>
-        {documentId && (
+        {hasDoc && (
           <button
             onClick={handleNewChat}
             title="New chat"
-            className="p-1.5 rounded-lg text-[#9ca3af] hover:text-white hover:bg-[#2a2d3e] transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg text-[#6b6b6b] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
           >
             <SquarePen className="w-4 h-4" />
           </button>
@@ -220,10 +273,10 @@ export default function ChatWindow({ userId, documentId, username, documentName,
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full gap-4 pb-16">
             <ScholarMindLogo size={48} />
-            <p className="text-[#9ca3af] text-sm text-center max-w-xs leading-relaxed">
-              {documentId
+            <p className="text-[#6b6b6b] text-sm text-center max-w-xs leading-relaxed">
+              {hasDoc
                 ? "Ask anything about your document — I'll find the answer and cite my sources."
-                : 'Upload a PDF to start asking questions.'}
+                : 'Select or upload a PDF to start asking questions.'}
             </p>
           </div>
         )}
@@ -236,7 +289,7 @@ export default function ChatWindow({ userId, documentId, username, documentName,
           const isExpanded = expandedCitations.has(i);
 
           return (
-            <div key={i} className="flex gap-3 items-start animate-fadeIn">
+            <div key={i} className="flex gap-3 items-start animate-fadeIn group">
               {msg.role === 'assistant' && (
                 <div className="shrink-0 mt-0.5">
                   <ScholarMindLogo size={24} />
@@ -245,29 +298,50 @@ export default function ChatWindow({ userId, documentId, username, documentName,
 
               <div className={`flex-1 flex flex-col gap-1.5 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                 {msg.role === 'user' ? (
-                  <div className="flex items-end gap-2.5">
-                    <div className="bg-[#3ecf8e] text-[#0f1117] font-medium px-4 py-2.5 rounded-2xl rounded-br-sm text-sm leading-relaxed max-w-[70%]">
-                      {msg.content}
+                  <>
+                    <div className="flex items-end gap-2.5">
+                      <div className="bg-[#1c1c1c] border border-[#2a2a2a] text-white px-4 py-2.5 rounded-2xl rounded-br-sm text-sm leading-relaxed max-w-[70%]">
+                        {msg.content}
+                      </div>
+                      <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center shrink-0 mb-0.5">
+                        <span className="text-white text-xs font-semibold">{initials}</span>
+                      </div>
                     </div>
-                    <div className="w-7 h-7 rounded-full bg-[#3ecf8e]/20 flex items-center justify-center shrink-0 mb-0.5">
-                      <span className="text-[#3ecf8e] text-xs font-semibold">{initials}</span>
+                    {/* User message actions — appear on hover */}
+                    <div className="flex items-center gap-0.5 pr-9 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => copyMessage(msg.content, i, true)}
+                        title="Copy"
+                        className="p-1 rounded text-[#6b6b6b] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                      >
+                        {copiedUserIndex === i
+                          ? <Check className="w-3.5 h-3.5 text-white" />
+                          : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                      <button
+                        onClick={() => startEdit(i)}
+                        title="Edit"
+                        className="p-1 rounded text-[#6b6b6b] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                  </div>
+                  </>
                 ) : (
                   <div className="flex flex-col gap-2 max-w-[85%]">
-                    <div className="pl-3 border-l-2 border-[#3ecf8e]/50 text-white text-sm leading-relaxed">
+                    <div className="pl-3 border-l-2 border-white/20 text-white text-sm leading-relaxed">
                       {draft.content}
                     </div>
 
-                    {/* Action bar */}
+                    {/* AI action bar */}
                     <div className="flex items-center gap-0.5 pl-3 flex-wrap">
                       <button
                         onClick={() => copyMessage(draft.content, i)}
                         title="Copy"
-                        className="p-1 rounded text-[#9ca3af] hover:text-[#3ecf8e] hover:bg-[#3ecf8e]/10 transition-colors cursor-pointer"
+                        className="p-1 rounded text-[#6b6b6b] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
                       >
                         {copiedIndex === i
-                          ? <Check className="w-3.5 h-3.5 text-[#3ecf8e]" />
+                          ? <Check className="w-3.5 h-3.5 text-white" />
                           : <Copy className="w-3.5 h-3.5" />}
                       </button>
 
@@ -277,18 +351,18 @@ export default function ChatWindow({ userId, documentId, username, documentName,
                             onClick={() => changeDraft(i, -1)}
                             disabled={activeDraft === 0}
                             title="Previous"
-                            className="p-1 rounded text-[#9ca3af] hover:text-white transition-colors disabled:opacity-30 cursor-pointer disabled:cursor-default"
+                            className="p-1 rounded text-[#6b6b6b] hover:text-white transition-colors disabled:opacity-30 cursor-pointer disabled:cursor-default"
                           >
                             <ChevronLeft className="w-3.5 h-3.5" />
                           </button>
-                          <span className="text-[10px] text-[#9ca3af] font-mono px-0.5">
+                          <span className="text-[10px] text-[#6b6b6b] font-mono px-0.5">
                             {activeDraft + 1}/{draftCount}
                           </span>
                           <button
                             onClick={() => changeDraft(i, 1)}
                             disabled={activeDraft === draftCount - 1}
                             title="Next"
-                            className="p-1 rounded text-[#9ca3af] hover:text-white transition-colors disabled:opacity-30 cursor-pointer disabled:cursor-default"
+                            className="p-1 rounded text-[#6b6b6b] hover:text-white transition-colors disabled:opacity-30 cursor-pointer disabled:cursor-default"
                           >
                             <ChevronRight className="w-3.5 h-3.5" />
                           </button>
@@ -299,7 +373,7 @@ export default function ChatWindow({ userId, documentId, username, documentName,
                         onClick={() => retryMessage(i)}
                         disabled={loading}
                         title="Retry"
-                        className="p-1 rounded text-[#9ca3af] hover:text-[#3ecf8e] hover:bg-[#3ecf8e]/10 transition-colors disabled:opacity-40 cursor-pointer disabled:cursor-default"
+                        className="p-1 rounded text-[#6b6b6b] hover:text-white hover:bg-white/10 transition-colors disabled:opacity-40 cursor-pointer disabled:cursor-default"
                       >
                         <RefreshCw className="w-3.5 h-3.5" />
                       </button>
@@ -307,7 +381,7 @@ export default function ChatWindow({ userId, documentId, username, documentName,
                       {hasCitations && (
                         <button
                           onClick={() => toggleCitations(i)}
-                          className="ml-1 px-2.5 py-0.5 rounded-full text-[10px] font-medium border border-[#3ecf8e]/30 text-[#3ecf8e] hover:bg-[#3ecf8e]/10 transition-colors cursor-pointer"
+                          className="ml-1 px-2.5 py-0.5 rounded-full text-[10px] font-medium border border-white/20 text-white hover:bg-white/10 transition-colors cursor-pointer"
                         >
                           {draft.citations!.length} source{draft.citations!.length !== 1 ? 's' : ''}{' '}
                           {isExpanded ? '▲' : '▼'}
@@ -334,10 +408,10 @@ export default function ChatWindow({ userId, documentId, username, documentName,
             <div className="shrink-0 mt-0.5">
               <ScholarMindLogo size={24} />
             </div>
-            <div className="pl-3 border-l-2 border-[#3ecf8e]/50 py-2 flex gap-1.5 items-center">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#3ecf8e] animate-bounce [animation-delay:0ms]" />
-              <span className="w-1.5 h-1.5 rounded-full bg-[#3ecf8e] animate-bounce [animation-delay:150ms]" />
-              <span className="w-1.5 h-1.5 rounded-full bg-[#3ecf8e] animate-bounce [animation-delay:300ms]" />
+            <div className="pl-3 border-l-2 border-white/20 py-2 flex gap-1.5 items-center">
+              <span className="w-1.5 h-1.5 rounded-full bg-white animate-bounce [animation-delay:0ms]" />
+              <span className="w-1.5 h-1.5 rounded-full bg-white animate-bounce [animation-delay:150ms]" />
+              <span className="w-1.5 h-1.5 rounded-full bg-white animate-bounce [animation-delay:300ms]" />
             </div>
           </div>
         )}
@@ -345,43 +419,92 @@ export default function ChatWindow({ userId, documentId, username, documentName,
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
-      <div className="p-4 border-t border-[#2a2d3e] shrink-0">
-        <div
-          className={`flex items-end gap-2 bg-[#1c1e2e] border rounded-2xl px-3 py-2.5 transition-colors ${
-            documentId
-              ? 'border-[#2a2d3e] focus-within:border-[#3ecf8e]/50'
-              : 'border-[#2a2d3e] opacity-60'
-          }`}
-        >
-          {documentId && documentName && (
-            <div className="shrink-0 flex items-center gap-1.5 bg-[#3ecf8e]/10 border border-[#3ecf8e]/20 rounded-lg px-2 py-1 mb-0.5">
-              <FileText className="w-3 h-3 text-[#3ecf8e]" />
-              <span className="text-[#3ecf8e] text-[10px] font-medium max-w-[96px] truncate">
-                {documentName}
+      {/* Input area */}
+      <div className="px-4 pb-4 pt-2 border-t border-[#2a2a2a] shrink-0 space-y-2">
+        {/* PDF pills */}
+        {docs.length > 0 && (
+          <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+            {docs.map((doc) => {
+              const isSelected = selectedDocIds.includes(doc.documentId);
+              return (
+                <div
+                  key={doc.documentId}
+                  className={`flex items-center gap-1.5 shrink-0 rounded-full border px-2 py-1 text-xs transition-colors ${
+                    isSelected
+                      ? 'bg-white/10 border-white/30 text-white'
+                      : 'bg-[#141414] border-[#2a2a2a] text-[#6b6b6b]'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => onToggleDoc(doc.documentId)}
+                    className="w-3 h-3 cursor-pointer accent-white"
+                    title={isSelected ? 'Deselect' : 'Select for chat'}
+                  />
+                  <FileText className="w-3 h-3 shrink-0" />
+                  <span
+                    className="cursor-pointer"
+                    onClick={() => onToggleDoc(doc.documentId)}
+                  >
+                    {truncateName(doc.filename)}
+                  </span>
+                  <button
+                    onClick={() => onDeleteDoc(doc.documentId)}
+                    className="text-[#6b6b6b] hover:text-red-400 transition-colors ml-0.5 cursor-pointer"
+                    title="Remove document"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              );
+            })}
+            {selectedDocIds.length > 1 && (
+              <span className="shrink-0 self-center text-[10px] text-[#6b6b6b] whitespace-nowrap">
+                {selectedDocIds.length} docs selected
               </span>
-            </div>
-          )}
+            )}
+          </div>
+        )}
+
+        {/* Edit mode label */}
+        {editingIndex !== null && (
+          <div className="flex items-center justify-between px-1">
+            <span className="text-[10px] text-[#6b6b6b]">Editing message</span>
+            <button onClick={cancelEdit} className="text-[10px] text-[#6b6b6b] hover:text-white transition-colors cursor-pointer">
+              Cancel (Esc)
+            </button>
+          </div>
+        )}
+
+        {/* Input bar */}
+        <div
+          className={`flex items-end gap-2 bg-[#141414] border rounded-2xl px-4 py-2.5 transition-colors ${
+            hasDoc
+              ? 'border-[#2a2a2a] focus-within:border-white/30'
+              : 'border-[#2a2a2a] opacity-60'
+          } ${editingIndex !== null ? 'border-white/25' : ''}`}
+        >
           <textarea
             ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder={documentId ? 'Ask anything about your document...' : 'Upload a document first...'}
+            placeholder={hasDoc ? 'Ask anything about your document...' : 'Select a document first...'}
             rows={1}
-            disabled={loading || !documentId}
-            className="flex-1 bg-transparent text-sm text-white placeholder-[#9ca3af] resize-none focus:outline-none min-h-[36px] py-1 disabled:opacity-50"
+            disabled={loading || !hasDoc}
+            className="flex-1 bg-transparent text-sm text-white placeholder-[#6b6b6b] resize-none focus:outline-none min-h-[36px] py-1 disabled:opacity-50"
           />
           <button
             onClick={() => sendMessage()}
-            disabled={loading || !input.trim() || !documentId}
-            className="shrink-0 w-8 h-8 rounded-xl bg-[#3ecf8e] flex items-center justify-center text-[#0f1117] hover:bg-[#34b87a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer mb-0.5"
+            disabled={loading || !input.trim() || !hasDoc}
+            className="shrink-0 w-8 h-8 rounded-xl bg-white flex items-center justify-center text-[#0a0a0a] hover:bg-[#e5e5e5] transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer mb-0.5"
           >
             <Send className="w-3.5 h-3.5" />
           </button>
         </div>
-        <p className="text-center text-[#9ca3af] text-[10px] mt-2">
-          Enter to send · Shift+Enter for new line
+        <p className="text-center text-[#6b6b6b] text-[10px]">
+          Enter to send · Shift+Enter for new line{editingIndex !== null ? ' · Esc to cancel edit' : ''}
         </p>
       </div>
     </div>

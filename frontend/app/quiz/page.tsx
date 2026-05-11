@@ -142,42 +142,42 @@ export default function QuizPage() {
   const initials = auth.username.slice(0, 2).toUpperCase();
 
   return (
-    <div className="min-h-screen bg-[#0f1117]">
-      <header className="border-b border-[#2a2d3e] px-6 py-4 flex items-center justify-between">
+    <div className="min-h-screen bg-[#0a0a0a]">
+      <header className="border-b border-[#2a2a2a] px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-[#3ecf8e]/20 flex items-center justify-center">
-            <span className="text-[#3ecf8e] text-sm font-bold">S</span>
+          <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
+            <span className="text-white text-sm font-bold">S</span>
           </div>
           <div>
             <h1 className="text-white font-semibold text-lg leading-none">Quiz Mode</h1>
-            <p className="text-[#9ca3af] text-xs mt-0.5">Test your knowledge</p>
+            <p className="text-[#6b6b6b] text-xs mt-0.5">Test your knowledge</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           {questions.length > 0 && (
             <button
               onClick={handleRetake}
-              className="text-sm text-[#9ca3af] hover:text-white border border-[#2a2d3e] hover:border-[#3ecf8e]/40 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+              className="text-sm text-[#6b6b6b] hover:text-white border border-[#2a2a2a] hover:border-white/30 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
             >
               Retake
             </button>
           )}
-          <a href="/" className="text-sm text-[#9ca3af] hover:text-[#3ecf8e] transition-colors">
+          <a href="/" className="text-sm text-[#6b6b6b] hover:text-white transition-colors">
             ← Chat
           </a>
-          <div className="flex items-center gap-2 pl-3 border-l border-[#2a2d3e]">
+          <div className="flex items-center gap-2 pl-3 border-l border-[#2a2a2a]">
             {auth.avatarUrl ? (
               <img src={auth.avatarUrl} alt={auth.username} className="w-7 h-7 rounded-full" />
             ) : (
-              <div className="w-7 h-7 rounded-full bg-[#3ecf8e]/20 flex items-center justify-center">
-                <span className="text-[#3ecf8e] text-xs font-semibold">{initials}</span>
+              <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center">
+                <span className="text-white text-xs font-semibold">{initials}</span>
               </div>
             )}
             <span className="text-sm text-white">{auth.username}</span>
             <button
               onClick={handleLogout}
               title="Log out"
-              className="p-1.5 rounded-lg text-[#9ca3af] hover:text-red-400 hover:bg-red-400/10 transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg text-[#6b6b6b] hover:text-red-400 hover:bg-red-400/10 transition-colors cursor-pointer"
             >
               <LogOut className="w-4 h-4" />
             </button>
@@ -186,10 +186,10 @@ export default function QuizPage() {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-8 space-y-6">
-        <div className="bg-[#1c1e2e] border border-[#2a2d3e] rounded-xl p-5 space-y-4">
+        <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl p-5 space-y-4">
           {savedDocs.length > 0 && (
             <div>
-              <p className="text-xs text-[#9ca3af] font-medium uppercase tracking-wider mb-2">
+              <p className="text-xs text-[#6b6b6b] font-medium uppercase tracking-wider mb-2">
                 Your Documents
               </p>
               <div className="flex flex-wrap gap-2">
@@ -199,8 +199,8 @@ export default function QuizPage() {
                     onClick={() => setDocumentId(doc.documentId)}
                     className={`text-xs px-3 py-1.5 rounded-full border transition-colors cursor-pointer ${
                       documentId === doc.documentId
-                        ? 'bg-[#3ecf8e]/10 border-[#3ecf8e]/40 text-[#3ecf8e]'
-                        : 'border-[#2a2d3e] text-[#9ca3af] hover:border-[#3ecf8e]/30 hover:text-white'
+                        ? 'bg-white/10 border-white/30 text-white'
+                        : 'border-[#2a2a2a] text-[#6b6b6b] hover:border-white/20 hover:text-white'
                     }`}
                   >
                     {doc.filename}
@@ -218,12 +218,12 @@ export default function QuizPage() {
                 onChange={(e) => setDocumentId(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
                 placeholder="Paste document UUID..."
-                className="flex-1 bg-[#0f1117] border border-[#2a2d3e] rounded-lg px-3 py-2 text-sm text-white placeholder-[#9ca3af] focus:outline-none focus:border-[#3ecf8e] transition-colors font-mono"
+                className="flex-1 bg-[#0a0a0a] border border-[#2a2a2a] rounded-lg px-3 py-2 text-sm text-white placeholder-[#6b6b6b] focus:outline-none focus:border-white/40 transition-colors font-mono"
               />
               <button
                 onClick={handleGenerate}
                 disabled={loading || !documentId.trim()}
-                className="bg-[#3ecf8e] text-[#0f1117] font-semibold px-4 py-2 rounded-lg text-sm hover:bg-[#34b87a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shrink-0"
+                className="bg-white text-[#0a0a0a] font-semibold px-4 py-2 rounded-lg text-sm hover:bg-[#e5e5e5] transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shrink-0"
               >
                 {loading ? 'Generating...' : 'Generate Quiz'}
               </button>
@@ -233,11 +233,11 @@ export default function QuizPage() {
         </div>
 
         {questions.length > 0 && (
-          <div className="bg-[#1c1e2e] border border-[#2a2d3e] rounded-xl px-5 py-3 flex items-center justify-between">
-            <span className="text-sm text-[#9ca3af]">Score</span>
-            <span className="text-[#3ecf8e] font-semibold font-mono">
+          <div className="bg-[#141414] border border-[#2a2a2a] rounded-xl px-5 py-3 flex items-center justify-between">
+            <span className="text-sm text-[#6b6b6b]">Score</span>
+            <span className="text-white font-semibold font-mono">
               {score.correct} / {score.total}
-              <span className="text-[#9ca3af] font-normal text-xs ml-1">answered</span>
+              <span className="text-[#6b6b6b] font-normal text-xs ml-1">answered</span>
             </span>
           </div>
         )}
@@ -256,11 +256,11 @@ export default function QuizPage() {
         </div>
 
         {score.total === questions.length && questions.length > 0 && (
-          <div className="bg-[#1c1e2e] border border-[#3ecf8e]/30 rounded-xl p-5 text-center space-y-3">
-            <p className="text-[#3ecf8e] font-semibold text-lg">
+          <div className="bg-[#141414] border border-white/20 rounded-xl p-5 text-center space-y-3">
+            <p className="text-white font-semibold text-lg">
               {score.correct}/{questions.length} correct
             </p>
-            <p className="text-[#9ca3af] text-sm">
+            <p className="text-[#6b6b6b] text-sm">
               {score.correct === questions.length
                 ? 'Perfect score!'
                 : score.correct >= questions.length * 0.7
@@ -270,7 +270,7 @@ export default function QuizPage() {
             <button
               onClick={handleMoreQuestions}
               disabled={loadingMore}
-              className="mt-1 bg-[#1c1e2e] border border-[#3ecf8e]/40 text-[#3ecf8e] text-sm font-medium px-5 py-2 rounded-lg hover:bg-[#3ecf8e]/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              className="mt-1 bg-[#141414] border border-white/25 text-white text-sm font-medium px-5 py-2 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
               {loadingMore ? 'Generating...' : '+ More Questions'}
             </button>

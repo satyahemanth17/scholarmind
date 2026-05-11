@@ -21,7 +21,7 @@ interface Props {
   onNodeClick?: (nodeLabel: string) => void;
 }
 
-const TOPIC_COLORS = ['#3ecf8e', '#6366f1', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+const TOPIC_COLORS = ['#a3a3a3', '#6366f1', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
 
 export default function KnowledgeGraph({ data, loading, onNodeClick }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -40,7 +40,6 @@ export default function KnowledgeGraph({ data, loading, onNodeClick }: Props) {
     const topics = [...new Set(data.nodes.map((n) => n.topic))];
     const colorScale = d3.scaleOrdinal<string>().domain(topics).range(TOPIC_COLORS);
 
-    // Compute degree for node sizing
     const degree = new Map<string, number>(data.nodes.map((n) => [n.id, 0]));
     data.edges.forEach((e) => {
       degree.set(String(e.source), (degree.get(String(e.source)) ?? 0) + 1);
@@ -49,11 +48,9 @@ export default function KnowledgeGraph({ data, loading, onNodeClick }: Props) {
     const maxDeg = Math.max(...degree.values(), 1);
     const nodeR = (id: string) => 7 + ((degree.get(id) ?? 0) / maxDeg) * 14;
 
-    // Clone data for simulation
     const nodes: SimNode[] = data.nodes.map((n) => ({ ...n }));
     const edges: SimEdge[] = data.edges.map((e) => ({ ...e }));
 
-    // Zoom + pan container
     const container = svg.append('g');
     svg.call(
       d3.zoom<SVGSVGElement, unknown>()
@@ -61,29 +58,23 @@ export default function KnowledgeGraph({ data, loading, onNodeClick }: Props) {
         .on('zoom', (event) => container.attr('transform', event.transform)),
     );
 
-    // Simulation
     const simulation = d3
       .forceSimulation(nodes)
-      .force(
-        'link',
-        d3.forceLink<SimNode, SimEdge>(edges).id((d) => d.id).distance(90),
-      )
+      .force('link', d3.forceLink<SimNode, SimEdge>(edges).id((d) => d.id).distance(90))
       .force('charge', d3.forceManyBody().strength(-220))
       .force('center', d3.forceCenter(width / 2, height / 2))
       .force('collision', d3.forceCollide<SimNode>().radius((d) => nodeR(d.id) + 5));
 
-    // Edges
     const link = container
       .append('g')
       .selectAll('line')
       .data(edges)
       .enter()
       .append('line')
-      .attr('stroke', '#2a2d3e')
+      .attr('stroke', '#2a2a2a')
       .attr('stroke-width', 1.5)
       .attr('stroke-opacity', 0.7);
 
-    // Drag
     const drag = d3
       .drag<SVGCircleElement, SimNode>()
       .on('start', (event, d) => {
@@ -101,7 +92,6 @@ export default function KnowledgeGraph({ data, loading, onNodeClick }: Props) {
         d.fy = null;
       });
 
-    // Nodes
     const node = container
       .append('g')
       .selectAll('circle')
@@ -132,7 +122,6 @@ export default function KnowledgeGraph({ data, loading, onNodeClick }: Props) {
           .attr('fill-opacity', 0.85);
       });
 
-    // Labels
     const label = container
       .append('g')
       .selectAll('text')
@@ -146,7 +135,6 @@ export default function KnowledgeGraph({ data, loading, onNodeClick }: Props) {
       .attr('dy', (d) => nodeR(d.id) + 13)
       .attr('pointer-events', 'none');
 
-    // Tick
     simulation.on('tick', () => {
       link
         .attr('x1', (d) => (d.source as SimNode).x!)
@@ -157,9 +145,7 @@ export default function KnowledgeGraph({ data, loading, onNodeClick }: Props) {
       label.attr('x', (d) => d.x!).attr('y', (d) => d.y!);
     });
 
-    return () => {
-      simulation.stop();
-    };
+    return () => { simulation.stop(); };
   }, [data, onNodeClick]);
 
   if (loading) {
@@ -167,10 +153,10 @@ export default function KnowledgeGraph({ data, loading, onNodeClick }: Props) {
       <div className="flex flex-col items-center justify-center h-full gap-4">
         <div className="animate-pulse space-y-3 w-48">
           {[80, 64, 72, 56].map((w, i) => (
-            <div key={i} className="h-3 bg-[#2a2d3e] rounded" style={{ width: `${w}%` }} />
+            <div key={i} className="h-3 bg-[#2a2a2a] rounded" style={{ width: `${w}%` }} />
           ))}
         </div>
-        <p className="text-[#9ca3af] text-sm">Generating knowledge graph...</p>
+        <p className="text-[#6b6b6b] text-sm">Generating knowledge graph...</p>
       </div>
     );
   }
@@ -178,7 +164,7 @@ export default function KnowledgeGraph({ data, loading, onNodeClick }: Props) {
   if (!data || data.nodes.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-[#9ca3af] text-sm text-center max-w-[220px] leading-relaxed">
+        <p className="text-[#6b6b6b] text-sm text-center max-w-[220px] leading-relaxed">
           Click &quot;Generate Graph&quot; to visualize concepts from this document.
         </p>
       </div>
@@ -190,24 +176,23 @@ export default function KnowledgeGraph({ data, loading, onNodeClick }: Props) {
       <svg ref={svgRef} className="w-full h-full" style={{ background: 'transparent' }} />
       {tooltip && (
         <div
-          className="absolute z-10 bg-[#1c1e2e] border border-[#2a2d3e] rounded-lg p-3 max-w-[220px] shadow-xl pointer-events-none"
+          className="absolute z-10 bg-[#141414] border border-[#2a2a2a] rounded-lg p-3 max-w-[220px] shadow-xl pointer-events-none"
           style={{ left: tooltip.x + 14, top: Math.max(0, tooltip.y - 48) }}
         >
           <p className="text-white text-xs font-semibold">{tooltip.node.label}</p>
-          <p className="text-[#3ecf8e] text-[10px] mt-0.5">{tooltip.node.topic}</p>
-          <p className="text-[#9ca3af] text-[10px] mt-1 leading-relaxed">{tooltip.node.summary}</p>
-          <p className="text-[#6366f1] text-[9px] mt-1.5 italic">Click to ask about this</p>
+          <p className="text-[#6b6b6b] text-[10px] mt-0.5">{tooltip.node.topic}</p>
+          <p className="text-[#6b6b6b] text-[10px] mt-1 leading-relaxed">{tooltip.node.summary}</p>
+          <p className="text-[#6b6b6b] text-[9px] mt-1.5 italic">Click to ask about this</p>
         </div>
       )}
-      {/* Legend */}
       <div className="absolute bottom-3 left-3 flex flex-col gap-1">
         {[...new Set(data.nodes.map((n) => n.topic))].slice(0, 6).map((topic, i) => (
           <div key={topic} className="flex items-center gap-1.5">
             <div
               className="w-2.5 h-2.5 rounded-full"
-              style={{ background: ['#3ecf8e', '#6366f1', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'][i % 6] }}
+              style={{ background: TOPIC_COLORS[i % 6] }}
             />
-            <span className="text-[9px] text-[#9ca3af]">{topic}</span>
+            <span className="text-[9px] text-[#6b6b6b]">{topic}</span>
           </div>
         ))}
       </div>
