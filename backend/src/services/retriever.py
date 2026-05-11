@@ -20,7 +20,7 @@ def similaritySearch(
         "match_chunks",
         {
             "query_embedding": query_embedding,
-            "match_threshold": 0.7,
+            "match_threshold": 0.3,
             "match_count": match_count,
             "filter_user_id": user_id,
         },

@@ -192,7 +192,12 @@ export default function Home() {
         </aside>
 
         <div className="flex-1 p-4 overflow-hidden">
-          <ChatWindow userId={auth.userId} documentId={activeDocId} />
+          <ChatWindow
+            userId={auth.userId}
+            documentId={activeDocId}
+            username={auth.username}
+            documentName={docs.find((d) => d.documentId === activeDocId)?.filename}
+          />
         </div>
       </main>
     </div>
