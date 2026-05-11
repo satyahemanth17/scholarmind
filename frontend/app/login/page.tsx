@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { setAuth, generateGuestId, isLoggedIn } from '@/lib/auth';
+import ScholarMindLogo from '@/components/ScholarMindLogo';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -24,9 +25,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm space-y-8">
         <div className="text-center space-y-3">
           <div className="flex items-center justify-center">
-            <div className="w-12 h-12 rounded-xl bg-[#3ecf8e]/20 flex items-center justify-center">
-              <span className="text-[#3ecf8e] text-xl font-bold">S</span>
-            </div>
+            <ScholarMindLogo size={64} />
           </div>
           <div>
             <h1 className="text-white font-bold text-2xl">ScholarMind</h1>
