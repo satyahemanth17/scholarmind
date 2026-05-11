@@ -1,12 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { LogOut } from 'lucide-react';
 import { generateQuiz, QuizQuestion } from '@/lib/api';
 import QuizCard from '@/components/QuizCard';
-
-const USER_ID = 'demo-user';
-const STORAGE_KEY = 'scholarmind_docs';
-const QUIZ_STATE_KEY = 'scholarmind-quiz-state';
+import { getAuth, clearAuth, AuthState } from '@/lib/auth';
 
 interface SavedDoc {
   documentId: string;
@@ -22,6 +21,8 @@ interface QuizState {
 }
 
 export default function QuizPage() {
+  const router = useRouter();
+  const [auth, setAuth] = useState<AuthState | null>(null);
   const [savedDocs, setSavedDocs] = useState<SavedDoc[]>([]);
   const [documentId, setDocumentId] = useState('');
   const [loading, setLoading] = useState(false);
@@ -33,27 +34,31 @@ export default function QuizPage() {
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, string>>({});
 
   useEffect(() => {
-    // Detect browser reload and clear all persisted state
+    const currentAuth = getAuth();
+    if (!currentAuth) { router.replace('/login'); return; }
+    setAuth(currentAuth);
+
     try {
       const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
       if (nav?.type === 'reload') {
-        localStorage.removeItem(STORAGE_KEY);
-        localStorage.removeItem(QUIZ_STATE_KEY);
         Object.keys(localStorage).forEach((k) => {
-          if (k.startsWith('scholarmind-chat-')) localStorage.removeItem(k);
+          if (k.startsWith('scholarmind-') && !k.startsWith('scholarmind-auth')) {
+            localStorage.removeItem(k);
+          }
         });
         return;
       }
     } catch {}
 
-    // Load saved docs and restore quiz state
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const docsKey = `scholarmind-docs-${currentAuth.userId}`;
+      const saved = localStorage.getItem(docsKey);
       if (saved) {
         const parsed = JSON.parse(saved) as SavedDoc[];
         setSavedDocs(parsed);
 
-        const quizSaved = localStorage.getItem(QUIZ_STATE_KEY);
+        const quizKey = `scholarmind-quiz-state-${currentAuth.userId}`;
+        const quizSaved = localStorage.getItem(quizKey);
         if (quizSaved) {
           const quizState = JSON.parse(quizSaved) as QuizState;
           setDocumentId(quizState.documentId);
@@ -65,28 +70,27 @@ export default function QuizPage() {
         }
       }
     } catch {}
-  }, []);
+  }, [router]);
 
-  // Persist quiz state whenever it changes
   useEffect(() => {
-    if (questions.length === 0) return;
+    if (questions.length === 0 || !auth) return;
     try {
       const state: QuizState = { documentId, questions, score, selectedAnswers };
-      localStorage.setItem(QUIZ_STATE_KEY, JSON.stringify(state));
+      localStorage.setItem(`scholarmind-quiz-state-${auth.userId}`, JSON.stringify(state));
     } catch {}
-  }, [questions, score, selectedAnswers, documentId]);
+  }, [questions, score, selectedAnswers, documentId, auth]);
 
   async function handleGenerate() {
-    if (!documentId.trim()) return;
+    if (!documentId.trim() || !auth) return;
     setLoading(true);
     setError(null);
     setQuestions([]);
     setScore({ correct: 0, total: 0 });
     setSelectedAnswers({});
     setQuizKey((k) => k + 1);
-    localStorage.removeItem(QUIZ_STATE_KEY);
+    localStorage.removeItem(`scholarmind-quiz-state-${auth.userId}`);
     try {
-      const result = await generateQuiz(documentId.trim(), USER_ID, 5);
+      const result = await generateQuiz(documentId.trim(), auth.userId, 5);
       setQuestions(result.questions);
     } catch {
       setError('Failed to generate quiz. Check the document ID and try again.');
@@ -96,11 +100,11 @@ export default function QuizPage() {
   }
 
   async function handleMoreQuestions() {
-    if (!documentId.trim()) return;
+    if (!documentId.trim() || !auth) return;
     setLoadingMore(true);
     setError(null);
     try {
-      const result = await generateQuiz(documentId.trim(), USER_ID, 5);
+      const result = await generateQuiz(documentId.trim(), auth.userId, 5);
       setQuestions((prev) => [...prev, ...result.questions]);
     } catch {
       setError('Failed to generate more questions.');
@@ -113,7 +117,7 @@ export default function QuizPage() {
     setScore({ correct: 0, total: 0 });
     setSelectedAnswers({});
     setQuizKey((k) => k + 1);
-    localStorage.removeItem(QUIZ_STATE_KEY);
+    if (auth) localStorage.removeItem(`scholarmind-quiz-state-${auth.userId}`);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -127,6 +131,15 @@ export default function QuizPage() {
   function handleSelect(index: number, opt: string) {
     setSelectedAnswers((prev) => ({ ...prev, [index]: opt }));
   }
+
+  function handleLogout() {
+    clearAuth();
+    router.replace('/login');
+  }
+
+  if (!auth) return null;
+
+  const initials = auth.username.slice(0, 2).toUpperCase();
 
   return (
     <div className="min-h-screen bg-[#0f1117]">
@@ -152,6 +165,23 @@ export default function QuizPage() {
           <a href="/" className="text-sm text-[#9ca3af] hover:text-[#3ecf8e] transition-colors">
             ← Chat
           </a>
+          <div className="flex items-center gap-2 pl-3 border-l border-[#2a2d3e]">
+            {auth.avatarUrl ? (
+              <img src={auth.avatarUrl} alt={auth.username} className="w-7 h-7 rounded-full" />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-[#3ecf8e]/20 flex items-center justify-center">
+                <span className="text-[#3ecf8e] text-xs font-semibold">{initials}</span>
+              </div>
+            )}
+            <span className="text-sm text-white">{auth.username}</span>
+            <button
+              onClick={handleLogout}
+              title="Log out"
+              className="p-1.5 rounded-lg text-[#9ca3af] hover:text-red-400 hover:bg-red-400/10 transition-colors cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </header>
 

@@ -43,22 +43,22 @@ export default function ChatWindow({ userId, documentId }: Props) {
       return;
     }
     try {
-      const saved = localStorage.getItem(`scholarmind-chat-${documentId}`);
+      const saved = localStorage.getItem(`scholarmind-chat-${userId}-${documentId}`);
       setMessages(saved ? JSON.parse(saved) : []);
     } catch {
       setMessages([]);
     }
     loadedForRef.current = documentId;
-  }, [documentId]);
+  }, [documentId, userId]);
 
   // Save messages when they change (skip empty to avoid overwriting on initial load)
   useEffect(() => {
     const docId = loadedForRef.current;
     if (!docId || messages.length === 0) return;
     try {
-      localStorage.setItem(`scholarmind-chat-${docId}`, JSON.stringify(messages));
+      localStorage.setItem(`scholarmind-chat-${userId}-${docId}`, JSON.stringify(messages));
     } catch {}
-  }, [messages]);
+  }, [messages, userId]);
 
   async function sendMessage() {
     if (!input.trim() || loading) return;
@@ -142,7 +142,7 @@ export default function ChatWindow({ userId, documentId }: Props) {
 
   function handleNewChat() {
     if (messages.length > 0 && !window.confirm('Clear chat history for this document?')) return;
-    if (documentId) localStorage.removeItem(`scholarmind-chat-${documentId}`);
+    if (documentId) localStorage.removeItem(`scholarmind-chat-${userId}-${documentId}`);
     setMessages([]);
   }
 

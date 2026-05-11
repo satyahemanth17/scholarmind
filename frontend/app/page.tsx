@@ -1,13 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Copy, Check } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Copy, Check, LogOut } from 'lucide-react';
 import DocumentUpload from '@/components/DocumentUpload';
 import ChatWindow from '@/components/ChatWindow';
 import { UploadResult } from '@/lib/api';
-
-const USER_ID = 'demo-user';
-const STORAGE_KEY = 'scholarmind_docs';
+import { getAuth, clearAuth, AuthState } from '@/lib/auth';
 
 interface UploadedDoc {
   documentId: string;
@@ -16,39 +15,45 @@ interface UploadedDoc {
 }
 
 export default function Home() {
+  const router = useRouter();
+  const [auth, setAuth] = useState<AuthState | null>(null);
   const [docs, setDocs] = useState<UploadedDoc[]>([]);
   const [activeDocId, setActiveDocId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
-    // Detect browser reload and wipe all persisted state
+    const currentAuth = getAuth();
+    if (!currentAuth) { router.replace('/login'); return; }
+    setAuth(currentAuth);
+
     try {
       const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
       if (nav?.type === 'reload') {
-        localStorage.removeItem(STORAGE_KEY);
-        localStorage.removeItem('scholarmind-quiz-state');
         Object.keys(localStorage).forEach((k) => {
-          if (k.startsWith('scholarmind-chat-')) localStorage.removeItem(k);
+          if (k.startsWith('scholarmind-') && !k.startsWith('scholarmind-auth')) {
+            localStorage.removeItem(k);
+          }
         });
         return;
       }
     } catch {}
 
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const saved = localStorage.getItem(`scholarmind-docs-${currentAuth.userId}`);
       if (saved) {
         const parsed = JSON.parse(saved) as UploadedDoc[];
         setDocs(parsed);
         if (parsed.length > 0) setActiveDocId(parsed[0].documentId);
       }
     } catch {}
-  }, []);
+  }, [router]);
 
   useEffect(() => {
+    if (!auth) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(docs));
+      localStorage.setItem(`scholarmind-docs-${auth.userId}`, JSON.stringify(docs));
     } catch {}
-  }, [docs]);
+  }, [docs, auth]);
 
   function handleUploadSuccess(result: UploadResult, filename: string) {
     const doc: UploadedDoc = {
@@ -67,7 +72,7 @@ export default function Home() {
       setActiveDocId(updated[0]?.documentId ?? null);
     }
     try {
-      localStorage.removeItem(`scholarmind-chat-${docId}`);
+      localStorage.removeItem(`scholarmind-chat-${auth?.userId}-${docId}`);
     } catch {}
   }
 
@@ -79,6 +84,15 @@ export default function Home() {
       setTimeout(() => setCopiedId(null), 2000);
     } catch {}
   }
+
+  function handleLogout() {
+    clearAuth();
+    router.replace('/login');
+  }
+
+  if (!auth) return null;
+
+  const initials = auth.username.slice(0, 2).toUpperCase();
 
   return (
     <div className="min-h-screen bg-[#0f1117] flex flex-col">
@@ -92,14 +106,33 @@ export default function Home() {
             <p className="text-[#9ca3af] text-xs mt-0.5">AI Study Assistant</p>
           </div>
         </div>
-        <a href="/quiz" className="text-sm text-[#9ca3af] hover:text-[#3ecf8e] transition-colors">
-          Quiz Mode →
-        </a>
+        <div className="flex items-center gap-3">
+          <a href="/quiz" className="text-sm text-[#9ca3af] hover:text-[#3ecf8e] transition-colors">
+            Quiz Mode →
+          </a>
+          <div className="flex items-center gap-2 pl-3 border-l border-[#2a2d3e]">
+            {auth.avatarUrl ? (
+              <img src={auth.avatarUrl} alt={auth.username} className="w-7 h-7 rounded-full" />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-[#3ecf8e]/20 flex items-center justify-center">
+                <span className="text-[#3ecf8e] text-xs font-semibold">{initials}</span>
+              </div>
+            )}
+            <span className="text-sm text-white">{auth.username}</span>
+            <button
+              onClick={handleLogout}
+              title="Log out"
+              className="p-1.5 rounded-lg text-[#9ca3af] hover:text-red-400 hover:bg-red-400/10 transition-colors cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       </header>
 
       <main className="flex-1 flex gap-0 overflow-hidden" style={{ height: 'calc(100vh - 65px)' }}>
         <aside className="w-80 border-r border-[#2a2d3e] flex flex-col p-4 gap-4 overflow-y-auto shrink-0">
-          <DocumentUpload userId={USER_ID} onUploadSuccess={handleUploadSuccess} />
+          <DocumentUpload userId={auth.userId} onUploadSuccess={handleUploadSuccess} />
 
           {docs.length > 0 && (
             <div>
@@ -159,7 +192,7 @@ export default function Home() {
         </aside>
 
         <div className="flex-1 p-4 overflow-hidden">
-          <ChatWindow userId={USER_ID} documentId={activeDocId} />
+          <ChatWindow userId={auth.userId} documentId={activeDocId} />
         </div>
       </main>
     </div>

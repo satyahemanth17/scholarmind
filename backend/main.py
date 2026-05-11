@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.handlers.upload import app as upload_app
 from src.handlers.query import app as query_app
 from src.handlers.quiz import app as quiz_app
+from src.handlers.auth import app as auth_app
 from src.handlers.graphql import app as graphql_app, graphql_app as gql_asgi
 
 app = FastAPI(title="ScholarMind API")
@@ -29,6 +30,8 @@ for route in upload_app.routes:
 for route in query_app.routes:
     app.routes.append(route)
 for route in quiz_app.routes:
+    app.routes.append(route)
+for route in auth_app.routes:
     app.routes.append(route)
 
 # GraphQL is a raw ASGI app — mount it directly
