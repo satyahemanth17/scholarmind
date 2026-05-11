@@ -21,6 +21,19 @@ export default function Home() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
+    // Detect browser reload and wipe all persisted state
+    try {
+      const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
+      if (nav?.type === 'reload') {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem('scholarmind-quiz-state');
+        Object.keys(localStorage).forEach((k) => {
+          if (k.startsWith('scholarmind-chat-')) localStorage.removeItem(k);
+        });
+        return;
+      }
+    } catch {}
+
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
@@ -53,6 +66,9 @@ export default function Home() {
     if (activeDocId === docId) {
       setActiveDocId(updated[0]?.documentId ?? null);
     }
+    try {
+      localStorage.removeItem(`scholarmind-chat-${docId}`);
+    } catch {}
   }
 
   async function handleCopyId(e: React.MouseEvent, id: string) {
@@ -93,8 +109,14 @@ export default function Home() {
               <div className="space-y-1.5">
                 {docs.map((doc) => (
                   <div key={doc.documentId} className="relative group">
-                    <button
+                    <div
                       onClick={() => setActiveDocId(doc.documentId)}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Select ${doc.filename}`}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') setActiveDocId(doc.documentId);
+                      }}
                       className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition-colors pr-8 cursor-pointer ${
                         activeDocId === doc.documentId
                           ? 'bg-[#3ecf8e]/10 text-[#3ecf8e] border border-[#3ecf8e]/30'
@@ -119,7 +141,7 @@ export default function Home() {
                           )}
                         </button>
                       </div>
-                    </button>
+                    </div>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDelete(doc.documentId); }}
                       title="Remove"

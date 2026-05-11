@@ -6,11 +6,19 @@ import QuizCard from '@/components/QuizCard';
 
 const USER_ID = 'demo-user';
 const STORAGE_KEY = 'scholarmind_docs';
+const QUIZ_STATE_KEY = 'scholarmind-quiz-state';
 
 interface SavedDoc {
   documentId: string;
   filename: string;
   chunkCount: number;
+}
+
+interface QuizState {
+  documentId: string;
+  questions: QuizQuestion[];
+  score: { correct: number; total: number };
+  selectedAnswers: Record<number, string>;
 }
 
 export default function QuizPage() {
@@ -22,17 +30,51 @@ export default function QuizPage() {
   const [error, setError] = useState<string | null>(null);
   const [score, setScore] = useState({ correct: 0, total: 0 });
   const [quizKey, setQuizKey] = useState(0);
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<number, string>>({});
 
   useEffect(() => {
+    // Detect browser reload and clear all persisted state
+    try {
+      const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
+      if (nav?.type === 'reload') {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(QUIZ_STATE_KEY);
+        Object.keys(localStorage).forEach((k) => {
+          if (k.startsWith('scholarmind-chat-')) localStorage.removeItem(k);
+        });
+        return;
+      }
+    } catch {}
+
+    // Load saved docs and restore quiz state
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved) as SavedDoc[];
         setSavedDocs(parsed);
-        if (parsed.length > 0 && !documentId) setDocumentId(parsed[0].documentId);
+
+        const quizSaved = localStorage.getItem(QUIZ_STATE_KEY);
+        if (quizSaved) {
+          const quizState = JSON.parse(quizSaved) as QuizState;
+          setDocumentId(quizState.documentId);
+          setQuestions(quizState.questions);
+          setScore(quizState.score);
+          setSelectedAnswers(quizState.selectedAnswers);
+        } else if (parsed.length > 0) {
+          setDocumentId(parsed[0].documentId);
+        }
       }
     } catch {}
   }, []);
+
+  // Persist quiz state whenever it changes
+  useEffect(() => {
+    if (questions.length === 0) return;
+    try {
+      const state: QuizState = { documentId, questions, score, selectedAnswers };
+      localStorage.setItem(QUIZ_STATE_KEY, JSON.stringify(state));
+    } catch {}
+  }, [questions, score, selectedAnswers, documentId]);
 
   async function handleGenerate() {
     if (!documentId.trim()) return;
@@ -40,7 +82,9 @@ export default function QuizPage() {
     setError(null);
     setQuestions([]);
     setScore({ correct: 0, total: 0 });
+    setSelectedAnswers({});
     setQuizKey((k) => k + 1);
+    localStorage.removeItem(QUIZ_STATE_KEY);
     try {
       const result = await generateQuiz(documentId.trim(), USER_ID, 5);
       setQuestions(result.questions);
@@ -67,7 +111,9 @@ export default function QuizPage() {
 
   function handleRetake() {
     setScore({ correct: 0, total: 0 });
+    setSelectedAnswers({});
     setQuizKey((k) => k + 1);
+    localStorage.removeItem(QUIZ_STATE_KEY);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -76,6 +122,10 @@ export default function QuizPage() {
       correct: prev.correct + (correct ? 1 : 0),
       total: prev.total + 1,
     }));
+  }
+
+  function handleSelect(index: number, opt: string) {
+    setSelectedAnswers((prev) => ({ ...prev, [index]: opt }));
   }
 
   return (
@@ -164,7 +214,14 @@ export default function QuizPage() {
 
         <div className="space-y-4">
           {questions.map((q, i) => (
-            <QuizCard key={`${quizKey}-${i}`} question={q} index={i} onAnswer={handleAnswer} />
+            <QuizCard
+              key={`${quizKey}-${i}`}
+              question={q}
+              index={i}
+              onAnswer={handleAnswer}
+              selectedAnswer={selectedAnswers[i]}
+              onSelect={(opt) => handleSelect(i, opt)}
+            />
           ))}
         </div>
 

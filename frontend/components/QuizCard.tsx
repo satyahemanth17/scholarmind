@@ -7,14 +7,21 @@ interface Props {
   question: QuizQuestion;
   index: number;
   onAnswer?: (correct: boolean) => void;
+  selectedAnswer?: string;
+  onSelect?: (opt: string) => void;
 }
 
-export default function QuizCard({ question, index, onAnswer }: Props) {
-  const [selected, setSelected] = useState<string | null>(null);
+export default function QuizCard({ question, index, onAnswer, selectedAnswer: controlledSelected, onSelect }: Props) {
+  const [internalSelected, setInternalSelected] = useState<string | null>(null);
+  const selected = controlledSelected ?? internalSelected;
 
   function handleSelect(opt: string) {
     if (selected) return;
-    setSelected(opt);
+    if (onSelect) {
+      onSelect(opt);
+    } else {
+      setInternalSelected(opt);
+    }
     onAnswer?.(opt === question.answer);
   }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
-import { Copy, Check, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Copy, Check, RefreshCw, ChevronLeft, ChevronRight, SquarePen } from 'lucide-react';
 import { queryDocuments, Citation } from '@/lib/api';
 import CitationCard from './CitationCard';
 
@@ -29,10 +29,36 @@ export default function ChatWindow({ userId, documentId }: Props) {
   const [loading, setLoading] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const loadedForRef = useRef<string | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
+
+  // Load messages when documentId changes
+  useEffect(() => {
+    loadedForRef.current = null;
+    if (!documentId) {
+      setMessages([]);
+      return;
+    }
+    try {
+      const saved = localStorage.getItem(`scholarmind-chat-${documentId}`);
+      setMessages(saved ? JSON.parse(saved) : []);
+    } catch {
+      setMessages([]);
+    }
+    loadedForRef.current = documentId;
+  }, [documentId]);
+
+  // Save messages when they change (skip empty to avoid overwriting on initial load)
+  useEffect(() => {
+    const docId = loadedForRef.current;
+    if (!docId || messages.length === 0) return;
+    try {
+      localStorage.setItem(`scholarmind-chat-${docId}`, JSON.stringify(messages));
+    } catch {}
+  }, [messages]);
 
   async function sendMessage() {
     if (!input.trim() || loading) return;
@@ -114,6 +140,12 @@ export default function ChatWindow({ userId, documentId }: Props) {
     } catch {}
   }
 
+  function handleNewChat() {
+    if (messages.length > 0 && !window.confirm('Clear chat history for this document?')) return;
+    if (documentId) localStorage.removeItem(`scholarmind-chat-${documentId}`);
+    setMessages([]);
+  }
+
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -130,11 +162,22 @@ export default function ChatWindow({ userId, documentId }: Props) {
 
   return (
     <div className="flex flex-col h-full bg-[#1c1e2e] rounded-xl border border-[#2a2d3e] overflow-hidden">
-      <div className="px-5 py-3 border-b border-[#2a2d3e] flex items-center gap-2">
-        <span className="w-2 h-2 rounded-full bg-[#3ecf8e]" />
-        <span className="text-sm font-medium text-white">
-          {documentId ? 'Document loaded' : 'Upload a document to start'}
-        </span>
+      <div className="px-5 py-3 border-b border-[#2a2d3e] flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-[#3ecf8e]" />
+          <span className="text-sm font-medium text-white">
+            {documentId ? 'Document loaded' : 'Upload a document to start'}
+          </span>
+        </div>
+        {documentId && (
+          <button
+            onClick={handleNewChat}
+            title="New chat"
+            className="p-1.5 rounded-lg text-[#9ca3af] hover:text-white hover:bg-[#2a2d3e] transition-colors cursor-pointer"
+          >
+            <SquarePen className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-5 space-y-4">
