@@ -29,3 +29,15 @@ def similaritySearch(
     if document_id:
         rows = [r for r in rows if r.get("document_id") == document_id]
     return rows
+
+
+def fetchDocumentChunks(document_id: str, limit: int = 30) -> list[dict]:
+    client = _get_client()
+    result = (
+        client.table("chunks")
+        .select("id, content, page_number, document_id")
+        .eq("document_id", document_id)
+        .limit(limit)
+        .execute()
+    )
+    return result.data or []

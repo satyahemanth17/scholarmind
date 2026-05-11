@@ -24,9 +24,11 @@ interface Props {
   documentId: string | null;
   username?: string;
   documentName?: string;
+  pendingMessage?: string | null;
+  onPendingConsumed?: () => void;
 }
 
-export default function ChatWindow({ userId, documentId, username, documentName }: Props) {
+export default function ChatWindow({ userId, documentId, username, documentName, pendingMessage, onPendingConsumed }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -73,11 +75,11 @@ export default function ChatWindow({ userId, documentId, username, documentName 
     }
   }, [input]);
 
-  async function sendMessage() {
-    if (!input.trim() || loading) return;
-    const query = input;
+  async function sendMessage(overrideContent?: string) {
+    const query = overrideContent ?? input.trim();
+    if (!query || loading || !documentId) return;
+    if (!overrideContent) setInput('');
     setMessages((prev) => [...prev, { role: 'user', content: query }]);
-    setInput('');
     setLoading(true);
     try {
       const result = await queryDocuments(query, userId, documentId ?? undefined);
@@ -102,6 +104,13 @@ export default function ChatWindow({ userId, documentId, username, documentName 
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (!pendingMessage || loading || !documentId) return;
+    onPendingConsumed?.();
+    sendMessage(pendingMessage);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingMessage]);
 
   async function retryMessage(msgIndex: number) {
     if (loading) return;
@@ -364,7 +373,7 @@ export default function ChatWindow({ userId, documentId, username, documentName 
             className="flex-1 bg-transparent text-sm text-white placeholder-[#9ca3af] resize-none focus:outline-none min-h-[36px] py-1 disabled:opacity-50"
           />
           <button
-            onClick={sendMessage}
+            onClick={() => sendMessage()}
             disabled={loading || !input.trim() || !documentId}
             className="shrink-0 w-8 h-8 rounded-xl bg-[#3ecf8e] flex items-center justify-center text-[#0f1117] hover:bg-[#34b87a] transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer mb-0.5"
           >

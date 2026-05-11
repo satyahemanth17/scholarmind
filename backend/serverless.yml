@@ -69,3 +69,19 @@ functions:
           path: /graphql
           method: get
           cors: true
+
+  graph:
+    handler: src/handlers/graph.handler
+    events:
+      - http:
+          path: /graph/{document_id}
+          method: get
+          cors: true
+
+  mastery:
+    handler: src/handlers/mastery.handler
+    events:
+      - http:
+          path: /mastery/{document_id}
+          method: post
+          cors: true

@@ -60,3 +60,65 @@ export async function generateQuiz(documentId: string, userId: string, numQuesti
   if (!res.ok) throw new Error('Quiz generation failed');
   return res.json();
 }
+
+export interface GraphNode {
+  id: string;
+  label: string;
+  topic: string;
+  summary: string;
+}
+
+export interface GraphEdge {
+  source: string;
+  target: string;
+  relationship: string;
+}
+
+export interface GraphData {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+export interface MasteryTopic {
+  name: string;
+  masteryScore: number;
+  questionsAsked: number;
+  quizCorrect: number;
+  quizTotal: number;
+  status: 'strong' | 'developing' | 'weak';
+  suggestedQuestion: string;
+}
+
+export interface MasteryResult {
+  topics: MasteryTopic[];
+  overallMastery: number;
+  studyStreak: number;
+  suggestedNextTopic: string;
+}
+
+export async function fetchKnowledgeGraph(documentId: string, userId: string): Promise<GraphData> {
+  const res = await fetch(`${API_BASE}/graph/${documentId}?user_id=${encodeURIComponent(userId)}`);
+  if (!res.ok) throw new Error('Failed to fetch knowledge graph');
+  return res.json();
+}
+
+export async function submitMasteryAnalysis(
+  documentId: string,
+  userId: string,
+  chatHistory: { role: string; content: string }[],
+  quizHistory: { question: string; answer: string; userAnswer?: string }[],
+  studyStreak = 1,
+): Promise<MasteryResult> {
+  const res = await fetch(`${API_BASE}/mastery/${documentId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      user_id: userId,
+      chat_history: chatHistory,
+      quiz_history: quizHistory,
+      study_streak: studyStreak,
+    }),
+  });
+  if (!res.ok) throw new Error('Failed to analyze mastery');
+  return res.json();
+}
