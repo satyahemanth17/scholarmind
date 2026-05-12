@@ -35,11 +35,12 @@ export default function Home() {
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const [graphCache, setGraphCache] = useState<Record<string, GraphData>>({});
   const [graphLoading, setGraphLoading] = useState(false);
-  const saveMessagesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Session management
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const currentSessionIdRef = useRef<string | null>(null);
+  useEffect(() => { currentSessionIdRef.current = currentSessionId; }, [currentSessionId]);
 
   const activeDocId = selectedDocIds[0] ?? null;
   const activeDocName = docs.find((d) => d.documentId === activeDocId)?.filename;
@@ -96,18 +97,17 @@ export default function Home() {
             createdAt: s.created_at,
             updatedAt: s.updated_at,
             pinned: s.is_pinned,
+            messages: s.messages,
           }));
           setSessions(mapped);
-          // Cache messages in localStorage so ChatWindow can read them on session switch
+          // Write messages to localStorage so ChatWindow can read them on session switch
           apiSessions.forEach((s) => {
-            if (Array.isArray(s.messages) && s.messages.length > 0) {
-              try {
-                localStorage.setItem(
-                  `scholarmind-session-msgs-${currentAuth.userId}-${s.id}`,
-                  JSON.stringify(s.messages),
-                );
-              } catch {}
-            }
+            try {
+              localStorage.setItem(
+                `scholarmind-session-msgs-${currentAuth.userId}-${s.id}`,
+                JSON.stringify(Array.isArray(s.messages) ? s.messages : []),
+              );
+            } catch {}
           });
           setCurrentSessionId(mapped.length > 0 ? mapped[0].id : crypto.randomUUID());
         })
@@ -195,12 +195,22 @@ export default function Home() {
   const handleSelectSession = useCallback((id: string) => {
     const session = sessions.find((s) => s.id === id);
     if (!session) return;
+    // Ensure messages from the sessions state (Supabase) are in localStorage
+    // so ChatWindow reads them on remount. This is a no-op if already current.
+    if (auth && Array.isArray(session.messages)) {
+      try {
+        localStorage.setItem(
+          `scholarmind-session-msgs-${auth.userId}-${id}`,
+          JSON.stringify(session.messages),
+        );
+      } catch {}
+    }
     setCurrentSessionId(id);
     if (session.documentIds.length > 0) {
       setSelectedDocIds(session.documentIds.filter((did) => docs.some((d) => d.documentId === did)));
     }
     setActiveTab('chat');
-  }, [sessions, docs]);
+  }, [sessions, docs, auth]);
 
   const handleDeleteSession = useCallback((id: string) => {
     setSessions((prev) => prev.filter((s) => s.id !== id));
@@ -274,14 +284,16 @@ export default function Home() {
     });
   }, [currentSessionId, selectedDocIds, auth]);
 
-  // Debounced messages sync to Supabase (GitHub users only)
+  // Immediate messages sync to Supabase + sessions state (GitHub users only)
   const handleMessagesChange = useCallback((msgs: Message[]) => {
-    if (!auth || auth.userId.startsWith('guest-') || !currentSessionId) return;
-    if (saveMessagesTimer.current) clearTimeout(saveMessagesTimer.current);
-    saveMessagesTimer.current = setTimeout(() => {
-      updateSession(currentSessionId, { messages: msgs as unknown[] }).catch(() => {});
-    }, 2000);
-  }, [auth, currentSessionId]);
+    if (!auth || auth.userId.startsWith('guest-') || !currentSessionIdRef.current) return;
+    const sid = currentSessionIdRef.current;
+    updateSession(sid, { messages: msgs as unknown[] }).catch(() => {});
+    // Keep sessions state current so handleSelectSession has fresh messages
+    setSessions((prev) =>
+      prev.map((s) => (s.id === sid ? { ...s, messages: msgs as unknown[] } : s)),
+    );
+  }, [auth]);
 
   if (!auth) return null;
 

@@ -122,9 +122,10 @@ export default function ChatWindow({
     setMessages(newMessages);
     setLoading(true);
 
-    // On first message, update session metadata
+    // On first message, set session title from first 6 words
     if (baseMessages.length === 0 && onSessionUpdate) {
-      onSessionUpdate(query.slice(0, 60), query);
+      const title = query.trim().split(/\s+/).slice(0, 6).join(' ');
+      onSessionUpdate(title, query.slice(0, 120));
     }
 
     try {

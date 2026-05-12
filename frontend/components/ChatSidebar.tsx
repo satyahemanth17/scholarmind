@@ -11,6 +11,7 @@ export interface ChatSession {
   createdAt: string;
   updatedAt: string;
   pinned?: boolean;
+  messages?: unknown[];
 }
 
 interface Props {
