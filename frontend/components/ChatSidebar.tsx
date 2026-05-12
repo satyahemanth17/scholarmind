@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { PanelLeftClose, PanelLeft, Plus, Search, Trash2, MessageSquare } from 'lucide-react';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { PanelLeftClose, PanelLeft, Plus, Search, MessageSquare, MoreHorizontal, Pin, PinOff, Pencil, Trash2 } from 'lucide-react';
 
 export interface ChatSession {
   id: string;
@@ -10,6 +10,7 @@ export interface ChatSession {
   documentIds: string[];
   createdAt: string;
   updatedAt: string;
+  pinned?: boolean;
 }
 
 interface Props {
@@ -21,29 +22,35 @@ interface Props {
   onNewChat: () => void;
   onSelectSession: (id: string) => void;
   onDeleteSession: (id: string) => void;
+  onPinSession: (id: string) => void;
+  onRenameSession: (id: string, newTitle: string) => void;
   onLogout: () => void;
 }
 
-function groupByDate(sessions: ChatSession[]) {
+function groupSessions(sessions: ChatSession[]) {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const yesterday = new Date(today.getTime() - 86400000);
   const weekAgo = new Date(today.getTime() - 7 * 86400000);
 
-  const groups: { label: string; items: ChatSession[] }[] = [
+  const pinned = sessions.filter((s) => s.pinned);
+  const unpinned = sessions.filter((s) => !s.pinned);
+
+  const groups: { label: string; items: ChatSession[]; isPinned?: boolean }[] = [
+    { label: 'Pinned', items: pinned, isPinned: true },
     { label: 'Today', items: [] },
     { label: 'Yesterday', items: [] },
     { label: 'Previous 7 Days', items: [] },
     { label: 'Older', items: [] },
   ];
 
-  for (const s of sessions) {
+  for (const s of unpinned) {
     const d = new Date(s.updatedAt);
     const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    if (day >= today) groups[0].items.push(s);
-    else if (day >= yesterday) groups[1].items.push(s);
-    else if (day >= weekAgo) groups[2].items.push(s);
-    else groups[3].items.push(s);
+    if (day >= today) groups[1].items.push(s);
+    else if (day >= yesterday) groups[2].items.push(s);
+    else if (day >= weekAgo) groups[3].items.push(s);
+    else groups[4].items.push(s);
   }
 
   return groups.filter((g) => g.items.length > 0);
@@ -68,11 +75,39 @@ export default function ChatSidebar({
   onNewChat,
   onSelectSession,
   onDeleteSession,
+  onPinSession,
+  onRenameSession,
   onLogout,
 }: Props) {
   const [open, setOpen] = useState(true);
   const [search, setSearch] = useState('');
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const menuRef = useRef<HTMLDivElement>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!menuOpenId) return;
+    function onMouseDown(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpenId(null);
+      }
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMenuOpenId(null);
+    }
+    document.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [menuOpenId]);
+
+  useEffect(() => {
+    if (renamingId) renameInputRef.current?.focus();
+  }, [renamingId]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return sessions;
@@ -82,7 +117,13 @@ export default function ChatSidebar({
     );
   }, [sessions, search]);
 
-  const groups = useMemo(() => groupByDate(filtered), [filtered]);
+  const groups = useMemo(() => groupSessions(filtered), [filtered]);
+
+  function commitRename(id: string) {
+    const name = renameValue.trim();
+    if (name) onRenameSession(id, name);
+    setRenamingId(null);
+  }
 
   if (!open) {
     return (
@@ -157,9 +198,7 @@ export default function ChatSidebar({
               {group.items.map((session) => (
                 <div
                   key={session.id}
-                  onMouseEnter={() => setHoveredId(session.id)}
-                  onMouseLeave={() => setHoveredId(null)}
-                  onClick={() => onSelectSession(session.id)}
+                  onClick={() => { if (renamingId !== session.id) onSelectSession(session.id); }}
                   className={`relative group flex items-start gap-2 px-2 py-2 rounded-lg cursor-pointer transition-colors ${
                     currentSessionId === session.id
                       ? 'bg-white/10 text-white'
@@ -167,22 +206,80 @@ export default function ChatSidebar({
                   }`}
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate leading-tight">
-                      {session.title || 'New conversation'}
-                    </p>
+                    {renamingId === session.id ? (
+                      <input
+                        ref={renameInputRef}
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          e.stopPropagation();
+                          if (e.key === 'Enter') commitRename(session.id);
+                          if (e.key === 'Escape') setRenamingId(null);
+                        }}
+                        onBlur={() => commitRename(session.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full bg-transparent text-xs text-white focus:outline-none border-b border-white/30 leading-tight pb-0.5"
+                      />
+                    ) : (
+                      <p className="text-xs font-medium truncate leading-tight flex items-center gap-1">
+                        {session.pinned && <Pin className="w-2.5 h-2.5 shrink-0 text-[#6b6b6b]" />}
+                        {session.title || 'New conversation'}
+                      </p>
+                    )}
                     <p className="text-[10px] text-[#6b6b6b] mt-0.5 truncate">
                       {relativeTime(session.updatedAt)}
                     </p>
                   </div>
-                  {hoveredId === session.id && (
+
+                  {/* Three dots menu */}
+                  <div
+                    ref={menuOpenId === session.id ? menuRef : undefined}
+                    className="relative shrink-0"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <button
-                      onClick={(e) => { e.stopPropagation(); onDeleteSession(session.id); }}
-                      className="shrink-0 p-1 rounded text-[#6b6b6b] hover:text-red-400 transition-colors cursor-pointer"
-                      title="Delete chat"
+                      onClick={() => setMenuOpenId(menuOpenId === session.id ? null : session.id)}
+                      className="p-1 rounded text-[#6b6b6b] hover:text-white transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
+                      title="More options"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <MoreHorizontal className="w-3.5 h-3.5" />
                     </button>
-                  )}
+
+                    {menuOpenId === session.id && (
+                      <div className="absolute right-0 top-full mt-1 w-36 bg-[#1c1c1c] border border-[#2a2a2a] rounded-lg shadow-xl z-50 py-1 overflow-hidden">
+                        <button
+                          onClick={() => { onPinSession(session.id); setMenuOpenId(null); }}
+                          className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-[#9b9b9b] hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                        >
+                          {session.pinned
+                            ? <PinOff className="w-3 h-3" />
+                            : <Pin className="w-3 h-3" />}
+                          {session.pinned ? 'Unpin' : 'Pin'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setRenameValue(session.title || '');
+                            setRenamingId(session.id);
+                            setMenuOpenId(null);
+                          }}
+                          className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-[#9b9b9b] hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                        >
+                          <Pencil className="w-3 h-3" />
+                          Rename
+                        </button>
+                        <button
+                          onClick={() => {
+                            setMenuOpenId(null);
+                            if (window.confirm('Delete this chat?')) onDeleteSession(session.id);
+                          }}
+                          className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-400/10 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

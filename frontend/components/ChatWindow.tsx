@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, KeyboardEvent, useCallback } from 'react';
-import { Copy, Check, RefreshCw, ChevronLeft, ChevronRight, SquarePen, Send, FileText, X, Pencil, Plus } from 'lucide-react';
+import { Copy, Check, RefreshCw, ChevronLeft, ChevronRight, Send, FileText, X, Pencil, Plus } from 'lucide-react';
 import { queryDocuments, uploadDocument, UploadResult, Citation } from '@/lib/api';
 import CitationCard from './CitationCard';
 import ScholarMindLogo from './ScholarMindLogo';
@@ -37,6 +37,7 @@ interface Props {
   onPendingConsumed?: () => void;
   sessionId: string | null;
   onSessionUpdate?: (title: string, preview: string) => void;
+  onMessagesChange?: (messages: Message[]) => void;
 }
 
 export default function ChatWindow({
@@ -51,6 +52,7 @@ export default function ChatWindow({
   onPendingConsumed,
   sessionId,
   onSessionUpdate,
+  onMessagesChange,
 }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -87,12 +89,15 @@ export default function ChatWindow({
     setExpandedCitations(new Set());
   }, [sessionId, userId]);
 
-  // Save messages whenever they change
+  // Save messages whenever they change (localStorage + notify parent for Supabase sync)
   useEffect(() => {
     if (!sessionId) return;
     try {
       localStorage.setItem(`scholarmind-session-msgs-${userId}-${sessionId}`, JSON.stringify(messages));
     } catch {}
+    onMessagesChange?.(messages);
+  // onMessagesChange excluded intentionally — it's a stable callback ref from page.tsx
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, userId, sessionId]);
 
   useEffect(() => {
@@ -211,14 +216,6 @@ export default function ChatWindow({
     setInput('');
   }
 
-  function handleNewChat() {
-    if (messages.length > 0 && !window.confirm('Clear this chat?')) return;
-    setMessages([]);
-    setExpandedCitations(new Set());
-    setEditingIndex(null);
-    setInput('');
-  }
-
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -264,26 +261,15 @@ export default function ChatWindow({
       style={{ background: 'linear-gradient(180deg, #0a0a0a 0%, #111111 100%)' }}
     >
       {/* Header */}
-      <div className="px-5 py-3 border-b border-[#2a2a2a] flex items-center justify-between gap-2 shrink-0">
-        <div className="flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${hasDoc ? 'bg-white' : 'bg-[#2a2a2a]'}`} />
-          <span className="text-sm font-medium text-white">
-            {hasDoc
-              ? selectedDocIds.length === 1
-                ? (docs.find((d) => d.documentId === selectedDocIds[0])?.filename || 'Document loaded')
-                : `${selectedDocIds.length} documents selected`
-              : 'Upload or select a document'}
-          </span>
-        </div>
-        {hasDoc && (
-          <button
-            onClick={handleNewChat}
-            title="New chat"
-            className="p-1.5 rounded-lg text-[#6b6b6b] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-          >
-            <SquarePen className="w-4 h-4" />
-          </button>
-        )}
+      <div className="px-5 py-3 border-b border-[#2a2a2a] flex items-center gap-2 shrink-0">
+        <span className={`w-2 h-2 rounded-full ${hasDoc ? 'bg-white' : 'bg-[#2a2a2a]'}`} />
+        <span className="text-sm font-medium text-white">
+          {hasDoc
+            ? selectedDocIds.length === 1
+              ? (docs.find((d) => d.documentId === selectedDocIds[0])?.filename || 'Document loaded')
+              : `${selectedDocIds.length} documents selected`
+            : 'Upload or select a document'}
+        </span>
       </div>
 
       {/* Messages — centered column */}
@@ -499,7 +485,7 @@ export default function ChatWindow({
             >
               {uploading
                 ? <span className="w-3 h-3 rounded-full border-2 border-white/40 border-t-white animate-spin" />
-                : <Plus className="w-3.5 h-3.5" />}
+                : <Plus className="w-3.5 h-3.5 text-white" />}
             </button>
             <input
               ref={fileInputRef}

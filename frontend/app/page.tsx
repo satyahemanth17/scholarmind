@@ -1,14 +1,21 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { LogOut, Network, TrendingUp } from 'lucide-react';
-import DocumentUpload from '@/components/DocumentUpload';
-import ChatWindow from '@/components/ChatWindow';
+import ChatWindow, { Message } from '@/components/ChatWindow';
 import KnowledgeGraph from '@/components/KnowledgeGraph';
 import MasteryDashboard from '@/components/MasteryDashboard';
 import ChatSidebar, { ChatSession } from '@/components/ChatSidebar';
-import { UploadResult, fetchKnowledgeGraph, GraphData } from '@/lib/api';
+import {
+  UploadResult,
+  fetchKnowledgeGraph,
+  GraphData,
+  fetchSessions,
+  createSession,
+  updateSession,
+  deleteSessionRemote,
+} from '@/lib/api';
 import { getAuth, clearAuth, AuthState } from '@/lib/auth';
 
 interface UploadedDoc {
@@ -19,10 +26,6 @@ interface UploadedDoc {
 
 type ActiveTab = 'chat' | 'graph' | 'mastery';
 
-function genId() {
-  return Math.random().toString(36).slice(2) + Date.now().toString(36);
-}
-
 export default function Home() {
   const router = useRouter();
   const [auth, setAuth] = useState<AuthState | null>(null);
@@ -32,6 +35,7 @@ export default function Home() {
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const [graphCache, setGraphCache] = useState<Record<string, GraphData>>({});
   const [graphLoading, setGraphLoading] = useState(false);
+  const saveMessagesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Session management
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -40,34 +44,19 @@ export default function Home() {
   const activeDocId = selectedDocIds[0] ?? null;
   const activeDocName = docs.find((d) => d.documentId === activeDocId)?.filename;
 
-  // Load auth, docs, sessions, and graph cache on mount
+  // Load auth, docs, and sessions on mount
   useEffect(() => {
     const currentAuth = getAuth();
     if (!currentAuth) { router.replace('/login'); return; }
     setAuth(currentAuth);
 
-    try {
-      const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
-      if (nav?.type === 'reload') {
-        Object.keys(localStorage).forEach((k) => {
-          if (k.startsWith('scholarmind-') && !k.startsWith('scholarmind-auth')) {
-            localStorage.removeItem(k);
-          }
-        });
-        const sid = genId();
-        setSessions([]);
-        setCurrentSessionId(sid);
-        return;
-      }
-    } catch {}
-
+    // Load docs from localStorage
     try {
       const saved = localStorage.getItem(`scholarmind-docs-${currentAuth.userId}`);
       if (saved) {
         const parsed = JSON.parse(saved) as UploadedDoc[];
         setDocs(parsed);
         if (parsed.length > 0) setSelectedDocIds([parsed[0].documentId]);
-
         const cachedGraphs: Record<string, GraphData> = {};
         parsed.forEach((doc) => {
           try {
@@ -79,26 +68,56 @@ export default function Home() {
       }
     } catch {}
 
-    // Load sessions
-    try {
-      const savedSessions = localStorage.getItem(`scholarmind-sessions-${currentAuth.userId}`);
-      if (savedSessions) {
-        const parsed = JSON.parse(savedSessions) as ChatSession[];
-        setSessions(parsed);
-        if (parsed.length > 0) {
-          setCurrentSessionId(parsed[0].id);
+    const isGuestUser = currentAuth.userId.startsWith('guest-');
+
+    if (isGuestUser) {
+      // Guest: load sessions from localStorage
+      try {
+        const savedSessions = localStorage.getItem(`scholarmind-sessions-${currentAuth.userId}`);
+        if (savedSessions) {
+          const parsed = JSON.parse(savedSessions) as ChatSession[];
+          setSessions(parsed);
+          setCurrentSessionId(parsed.length > 0 ? parsed[0].id : crypto.randomUUID());
         } else {
-          setCurrentSessionId(genId());
+          setCurrentSessionId(crypto.randomUUID());
         }
-      } else {
-        setCurrentSessionId(genId());
+      } catch {
+        setCurrentSessionId(crypto.randomUUID());
       }
-    } catch {
-      setCurrentSessionId(genId());
+    } else {
+      // GitHub user: fetch sessions from Supabase
+      fetchSessions(currentAuth.userId)
+        .then((apiSessions) => {
+          const mapped: ChatSession[] = apiSessions.map((s) => ({
+            id: s.id,
+            title: s.title,
+            preview: s.preview,
+            documentIds: s.document_ids,
+            createdAt: s.created_at,
+            updatedAt: s.updated_at,
+            pinned: s.is_pinned,
+          }));
+          setSessions(mapped);
+          // Cache messages in localStorage so ChatWindow can read them on session switch
+          apiSessions.forEach((s) => {
+            if (Array.isArray(s.messages) && s.messages.length > 0) {
+              try {
+                localStorage.setItem(
+                  `scholarmind-session-msgs-${currentAuth.userId}-${s.id}`,
+                  JSON.stringify(s.messages),
+                );
+              } catch {}
+            }
+          });
+          setCurrentSessionId(mapped.length > 0 ? mapped[0].id : crypto.randomUUID());
+        })
+        .catch(() => {
+          setCurrentSessionId(crypto.randomUUID());
+        });
     }
   }, [router]);
 
-  // Persist docs
+  // Persist docs to localStorage
   useEffect(() => {
     if (!auth) return;
     try {
@@ -106,9 +125,9 @@ export default function Home() {
     } catch {}
   }, [docs, auth]);
 
-  // Persist sessions
+  // Persist sessions to localStorage (guest users only — Supabase handles GitHub users)
   useEffect(() => {
-    if (!auth) return;
+    if (!auth || !auth.userId.startsWith('guest-')) return;
     try {
       localStorage.setItem(`scholarmind-sessions-${auth.userId}`, JSON.stringify(sessions));
     } catch {}
@@ -169,8 +188,7 @@ export default function Home() {
 
   // Session management
   const handleNewChat = useCallback(() => {
-    const sid = genId();
-    setCurrentSessionId(sid);
+    setCurrentSessionId(crypto.randomUUID());
     setActiveTab('chat');
   }, []);
 
@@ -178,7 +196,6 @@ export default function Home() {
     const session = sessions.find((s) => s.id === id);
     if (!session) return;
     setCurrentSessionId(id);
-    // Restore document selection from session
     if (session.documentIds.length > 0) {
       setSelectedDocIds(session.documentIds.filter((did) => docs.some((d) => d.documentId === did)));
     }
@@ -190,15 +207,40 @@ export default function Home() {
     try {
       if (auth) localStorage.removeItem(`scholarmind-session-msgs-${auth.userId}-${id}`);
     } catch {}
+    if (auth && !auth.userId.startsWith('guest-')) {
+      deleteSessionRemote(id).catch(() => {});
+    }
     if (currentSessionId === id) {
       const remaining = sessions.filter((s) => s.id !== id);
-      setCurrentSessionId(remaining.length > 0 ? remaining[0].id : genId());
+      setCurrentSessionId(remaining.length > 0 ? remaining[0].id : crypto.randomUUID());
     }
   }, [currentSessionId, sessions, auth]);
 
+  const handlePinSession = useCallback((id: string) => {
+    setSessions((prev) => prev.map((s) => {
+      if (s.id !== id) return s;
+      const newPinned = !s.pinned;
+      if (auth && !auth.userId.startsWith('guest-')) {
+        updateSession(id, { is_pinned: newPinned }).catch(() => {});
+      }
+      return { ...s, pinned: newPinned };
+    }));
+  }, [auth]);
+
+  const handleRenameSession = useCallback((id: string, newTitle: string) => {
+    setSessions((prev) => prev.map((s) => {
+      if (s.id !== id) return s;
+      if (auth && !auth.userId.startsWith('guest-')) {
+        updateSession(id, { title: newTitle }).catch(() => {});
+      }
+      return { ...s, title: newTitle };
+    }));
+  }, [auth]);
+
   const handleSessionUpdate = useCallback((title: string, preview: string) => {
-    if (!currentSessionId) return;
+    if (!currentSessionId || !auth) return;
     const now = new Date().toISOString();
+    const isGuest = auth.userId.startsWith('guest-');
     setSessions((prev) => {
       const existing = prev.find((s) => s.id === currentSessionId);
       const updated: ChatSession = {
@@ -208,13 +250,38 @@ export default function Home() {
         documentIds: selectedDocIds,
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
+        pinned: existing?.pinned,
       };
+      if (!isGuest) {
+        if (existing) {
+          updateSession(currentSessionId, { title, preview, document_ids: selectedDocIds }).catch(() => {});
+        } else {
+          createSession({
+            id: currentSessionId,
+            user_id: auth.userId,
+            title,
+            preview,
+            messages: [],
+            document_ids: selectedDocIds,
+            is_pinned: false,
+          }).catch(() => {});
+        }
+      }
       if (existing) {
         return [updated, ...prev.filter((s) => s.id !== currentSessionId)];
       }
       return [updated, ...prev];
     });
-  }, [currentSessionId, selectedDocIds]);
+  }, [currentSessionId, selectedDocIds, auth]);
+
+  // Debounced messages sync to Supabase (GitHub users only)
+  const handleMessagesChange = useCallback((msgs: Message[]) => {
+    if (!auth || auth.userId.startsWith('guest-') || !currentSessionId) return;
+    if (saveMessagesTimer.current) clearTimeout(saveMessagesTimer.current);
+    saveMessagesTimer.current = setTimeout(() => {
+      updateSession(currentSessionId, { messages: msgs as unknown[] }).catch(() => {});
+    }, 2000);
+  }, [auth, currentSessionId]);
 
   if (!auth) return null;
 
@@ -276,23 +343,10 @@ export default function Home() {
           onNewChat={handleNewChat}
           onSelectSession={handleSelectSession}
           onDeleteSession={handleDeleteSession}
+          onPinSession={handlePinSession}
+          onRenameSession={handleRenameSession}
           onLogout={handleLogout}
         />
-
-        {/* Upload sidebar */}
-        <aside className="w-64 border-r border-[#2a2a2a] flex flex-col p-4 gap-4 shrink-0">
-          <DocumentUpload userId={auth.userId} onUploadSuccess={handleUploadSuccess} />
-          {docs.length === 0 && (
-            <p className="text-[#6b6b6b] text-xs text-center leading-relaxed px-2">
-              Upload a PDF to start. Select docs via pills above the chat input.
-            </p>
-          )}
-          {docs.length > 0 && (
-            <p className="text-[#6b6b6b] text-xs text-center">
-              {docs.length} document{docs.length !== 1 ? 's' : ''} · select via chat input
-            </p>
-          )}
-        </aside>
 
         {/* Right panel */}
         <div className="flex-1 flex flex-col overflow-hidden">
@@ -330,6 +384,7 @@ export default function Home() {
                 onPendingConsumed={() => setPendingMessage(null)}
                 sessionId={currentSessionId}
                 onSessionUpdate={handleSessionUpdate}
+                onMessagesChange={handleMessagesChange}
               />
             )}
 

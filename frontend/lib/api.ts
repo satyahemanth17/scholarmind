@@ -111,6 +111,64 @@ export async function fetchKnowledgeGraph(documentId: string, userId: string): P
   return res.json();
 }
 
+export interface SessionApiData {
+  id: string;
+  title: string;
+  preview: string;
+  document_ids: string[];
+  is_pinned: boolean;
+  messages: unknown[];
+  created_at: string;
+  updated_at: string;
+}
+
+export async function fetchSessions(userId: string): Promise<SessionApiData[]> {
+  const res = await fetch(`${API_BASE}/sessions/${encodeURIComponent(userId)}`);
+  if (!res.ok) throw new Error('Failed to fetch sessions');
+  return res.json();
+}
+
+export async function createSession(data: {
+  id: string;
+  user_id: string;
+  title: string;
+  preview: string;
+  messages: unknown[];
+  document_ids: string[];
+  is_pinned: boolean;
+}): Promise<SessionApiData> {
+  const res = await fetch(`${API_BASE}/sessions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error('Failed to create session');
+  return res.json();
+}
+
+export async function updateSession(
+  sessionId: string,
+  data: Partial<{
+    title: string;
+    preview: string;
+    messages: unknown[];
+    document_ids: string[];
+    is_pinned: boolean;
+  }>,
+): Promise<void> {
+  await fetch(`${API_BASE}/sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteSessionRemote(sessionId: string): Promise<void> {
+  await fetch(`${API_BASE}/sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function submitMasteryAnalysis(
   documentId: string,
   userId: string,

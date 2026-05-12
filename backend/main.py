@@ -16,6 +16,7 @@ from src.handlers.auth import app as auth_app
 from src.handlers.graphql import app as graphql_app, graphql_app as gql_asgi
 from src.handlers.graph import app as graph_app
 from src.handlers.mastery import app as mastery_app
+from src.handlers.sessions import app as sessions_app
 
 app = FastAPI(title="ScholarMind API")
 
@@ -39,6 +40,8 @@ for route in auth_app.routes:
 for route in graph_app.routes:
     app.routes.append(route)
 for route in mastery_app.routes:
+    app.routes.append(route)
+for route in sessions_app.routes:
     app.routes.append(route)
 
 # GraphQL is a raw ASGI app — mount it directly
