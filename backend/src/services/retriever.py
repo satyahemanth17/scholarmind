@@ -17,23 +17,36 @@ def similaritySearch(
     document_ids: Optional[list[str]] = None,
 ) -> list[dict]:
     client = _get_client()
-    # Fetch extra rows to compensate for post-fetch document filtering
     target_ids = document_ids or ([document_id] if document_id else None)
-    fetch_count = match_count * 4 if target_ids else match_count
+
+    if target_ids:
+        # When filtering by specific docs, fetch ALL user chunks ranked by similarity
+        # (low threshold, high limit) then filter by doc_id in Python.
+        # This avoids the bug where target doc chunks rank outside the top N globally.
+        result = client.rpc(
+            "match_chunks",
+            {
+                "query_embedding": query_embedding,
+                "match_threshold": 0.1,
+                "match_count": 2000,
+                "filter_user_id": user_id,
+            },
+        ).execute()
+        rows = result.data or []
+        doc_set = set(str(d) for d in target_ids)
+        rows = [r for r in rows if str(r.get("document_id", "")) in doc_set]
+        return rows[:match_count]
+
     result = client.rpc(
         "match_chunks",
         {
             "query_embedding": query_embedding,
             "match_threshold": 0.3,
-            "match_count": fetch_count,
+            "match_count": match_count,
             "filter_user_id": user_id,
         },
     ).execute()
-    rows = result.data or []
-    if target_ids:
-        doc_set = set(str(d) for d in target_ids)
-        rows = [r for r in rows if str(r.get("document_id", "")) in doc_set]
-    return rows[:match_count]
+    return result.data or []
 
 
 def fetchDocumentChunks(document_id: str, limit: int = 30) -> list[dict]:

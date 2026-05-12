@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { LogOut, Network, TrendingUp } from 'lucide-react';
 import DocumentUpload from '@/components/DocumentUpload';
 import ChatWindow from '@/components/ChatWindow';
 import KnowledgeGraph from '@/components/KnowledgeGraph';
 import MasteryDashboard from '@/components/MasteryDashboard';
+import ChatSidebar, { ChatSession } from '@/components/ChatSidebar';
 import { UploadResult, fetchKnowledgeGraph, GraphData } from '@/lib/api';
 import { getAuth, clearAuth, AuthState } from '@/lib/auth';
 
@@ -18,6 +19,10 @@ interface UploadedDoc {
 
 type ActiveTab = 'chat' | 'graph' | 'mastery';
 
+function genId() {
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
 export default function Home() {
   const router = useRouter();
   const [auth, setAuth] = useState<AuthState | null>(null);
@@ -28,9 +33,14 @@ export default function Home() {
   const [graphCache, setGraphCache] = useState<Record<string, GraphData>>({});
   const [graphLoading, setGraphLoading] = useState(false);
 
+  // Session management
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+
   const activeDocId = selectedDocIds[0] ?? null;
   const activeDocName = docs.find((d) => d.documentId === activeDocId)?.filename;
 
+  // Load auth, docs, sessions, and graph cache on mount
   useEffect(() => {
     const currentAuth = getAuth();
     if (!currentAuth) { router.replace('/login'); return; }
@@ -44,6 +54,9 @@ export default function Home() {
             localStorage.removeItem(k);
           }
         });
+        const sid = genId();
+        setSessions([]);
+        setCurrentSessionId(sid);
         return;
       }
     } catch {}
@@ -65,14 +78,41 @@ export default function Home() {
         setGraphCache(cachedGraphs);
       }
     } catch {}
+
+    // Load sessions
+    try {
+      const savedSessions = localStorage.getItem(`scholarmind-sessions-${currentAuth.userId}`);
+      if (savedSessions) {
+        const parsed = JSON.parse(savedSessions) as ChatSession[];
+        setSessions(parsed);
+        if (parsed.length > 0) {
+          setCurrentSessionId(parsed[0].id);
+        } else {
+          setCurrentSessionId(genId());
+        }
+      } else {
+        setCurrentSessionId(genId());
+      }
+    } catch {
+      setCurrentSessionId(genId());
+    }
   }, [router]);
 
+  // Persist docs
   useEffect(() => {
     if (!auth) return;
     try {
       localStorage.setItem(`scholarmind-docs-${auth.userId}`, JSON.stringify(docs));
     } catch {}
   }, [docs, auth]);
+
+  // Persist sessions
+  useEffect(() => {
+    if (!auth) return;
+    try {
+      localStorage.setItem(`scholarmind-sessions-${auth.userId}`, JSON.stringify(sessions));
+    } catch {}
+  }, [sessions, auth]);
 
   function handleUploadSuccess(result: UploadResult, filename: string) {
     const doc: UploadedDoc = {
@@ -95,7 +135,6 @@ export default function Home() {
       return next;
     });
     try {
-      localStorage.removeItem(`scholarmind-chat-${auth?.userId}-${docId}`);
       localStorage.removeItem(`scholarmind-graph-${auth?.userId}-${docId}`);
       localStorage.removeItem(`scholarmind-mastery-${auth?.userId}-${docId}`);
     } catch {}
@@ -118,10 +157,7 @@ export default function Home() {
     try {
       const result = await fetchKnowledgeGraph(activeDocId, auth.userId);
       setGraphCache((prev) => ({ ...prev, [activeDocId]: result }));
-      localStorage.setItem(
-        `scholarmind-graph-${auth.userId}-${activeDocId}`,
-        JSON.stringify(result),
-      );
+      localStorage.setItem(`scholarmind-graph-${auth.userId}-${activeDocId}`, JSON.stringify(result));
     } catch {}
     setGraphLoading(false);
   }
@@ -130,6 +166,55 @@ export default function Home() {
     setPendingMessage(message);
     setActiveTab('chat');
   }
+
+  // Session management
+  const handleNewChat = useCallback(() => {
+    const sid = genId();
+    setCurrentSessionId(sid);
+    setActiveTab('chat');
+  }, []);
+
+  const handleSelectSession = useCallback((id: string) => {
+    const session = sessions.find((s) => s.id === id);
+    if (!session) return;
+    setCurrentSessionId(id);
+    // Restore document selection from session
+    if (session.documentIds.length > 0) {
+      setSelectedDocIds(session.documentIds.filter((did) => docs.some((d) => d.documentId === did)));
+    }
+    setActiveTab('chat');
+  }, [sessions, docs]);
+
+  const handleDeleteSession = useCallback((id: string) => {
+    setSessions((prev) => prev.filter((s) => s.id !== id));
+    try {
+      if (auth) localStorage.removeItem(`scholarmind-session-msgs-${auth.userId}-${id}`);
+    } catch {}
+    if (currentSessionId === id) {
+      const remaining = sessions.filter((s) => s.id !== id);
+      setCurrentSessionId(remaining.length > 0 ? remaining[0].id : genId());
+    }
+  }, [currentSessionId, sessions, auth]);
+
+  const handleSessionUpdate = useCallback((title: string, preview: string) => {
+    if (!currentSessionId) return;
+    const now = new Date().toISOString();
+    setSessions((prev) => {
+      const existing = prev.find((s) => s.id === currentSessionId);
+      const updated: ChatSession = {
+        id: currentSessionId,
+        title,
+        preview,
+        documentIds: selectedDocIds,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      };
+      if (existing) {
+        return [updated, ...prev.filter((s) => s.id !== currentSessionId)];
+      }
+      return [updated, ...prev];
+    });
+  }, [currentSessionId, selectedDocIds]);
 
   if (!auth) return null;
 
@@ -181,12 +266,25 @@ export default function Home() {
       </header>
 
       <main className="flex-1 flex gap-0 overflow-hidden" style={{ height: 'calc(100vh - 65px)' }}>
-        {/* Sidebar — upload only */}
-        <aside className="w-72 border-r border-[#2a2a2a] flex flex-col p-4 gap-4 shrink-0">
+        {/* Chat history sidebar */}
+        <ChatSidebar
+          sessions={sessions}
+          currentSessionId={currentSessionId}
+          username={auth.username}
+          avatarUrl={auth.avatarUrl}
+          initials={initials}
+          onNewChat={handleNewChat}
+          onSelectSession={handleSelectSession}
+          onDeleteSession={handleDeleteSession}
+          onLogout={handleLogout}
+        />
+
+        {/* Upload sidebar */}
+        <aside className="w-64 border-r border-[#2a2a2a] flex flex-col p-4 gap-4 shrink-0">
           <DocumentUpload userId={auth.userId} onUploadSuccess={handleUploadSuccess} />
           {docs.length === 0 && (
             <p className="text-[#6b6b6b] text-xs text-center leading-relaxed px-2">
-              Upload a PDF to start. Manage documents via the pills above the chat input.
+              Upload a PDF to start. Select docs via pills above the chat input.
             </p>
           )}
           {docs.length > 0 && (
@@ -220,14 +318,18 @@ export default function Home() {
           <div className="flex-1 p-4 overflow-hidden">
             {activeTab === 'chat' && (
               <ChatWindow
+                key={currentSessionId ?? 'no-session'}
                 userId={auth.userId}
                 docs={docs}
                 selectedDocIds={selectedDocIds}
                 onToggleDoc={handleToggleDoc}
                 onDeleteDoc={handleDeleteDoc}
+                onUploadSuccess={handleUploadSuccess}
                 username={auth.username}
                 pendingMessage={pendingMessage}
                 onPendingConsumed={() => setPendingMessage(null)}
+                sessionId={currentSessionId}
+                onSessionUpdate={handleSessionUpdate}
               />
             )}
 
@@ -240,9 +342,7 @@ export default function Home() {
                   <div className="flex items-center gap-2">
                     <Network className="w-4 h-4 text-[#6366f1]" />
                     <span className="text-sm font-medium text-white">
-                      {activeDocId
-                        ? (activeDocName || 'Document loaded')
-                        : 'Select a document to start'}
+                      {activeDocId ? (activeDocName || 'Document loaded') : 'Select a document to start'}
                     </span>
                     {activeDocId && graphCache[activeDocId] && (
                       <span className="text-xs text-[#6b6b6b]">
@@ -251,10 +351,7 @@ export default function Home() {
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <a
-                      href="/graph"
-                      className="text-xs text-[#6b6b6b] hover:text-white transition-colors"
-                    >
+                    <a href="/graph" className="text-xs text-[#6b6b6b] hover:text-white transition-colors">
                       Full screen ↗
                     </a>
                     {activeDocId && (
@@ -263,11 +360,7 @@ export default function Home() {
                         disabled={graphLoading}
                         className="text-xs px-3 py-1.5 rounded-lg bg-[#6366f1]/20 border border-[#6366f1]/30 text-[#6366f1] hover:bg-[#6366f1]/30 transition-colors disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
                       >
-                        {graphLoading
-                          ? 'Generating...'
-                          : graphCache[activeDocId]
-                          ? 'Regenerate'
-                          : 'Generate Graph'}
+                        {graphLoading ? 'Generating...' : graphCache[activeDocId] ? 'Regenerate' : 'Generate Graph'}
                       </button>
                     )}
                   </div>
