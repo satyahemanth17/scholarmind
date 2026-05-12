@@ -101,7 +101,7 @@ export default function MasteryDashboard({ userId, documentId, documentName, onS
   if (!documentId) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-[#6b6b6b] text-sm">Select a document to track mastery.</p>
+        <p className="text-[#6b6b6b] text-sm">Upload a PDF to track mastery.</p>
       </div>
     );
   }

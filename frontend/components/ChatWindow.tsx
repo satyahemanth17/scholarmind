@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, KeyboardEvent, useCallback } from 'react';
-import { Copy, Check, RefreshCw, ChevronLeft, ChevronRight, Send, FileText, X, Pencil, Plus } from 'lucide-react';
+import { Copy, Check, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, Send, FileText, X, Pencil, Plus, Pin, Trash2 } from 'lucide-react';
 import { queryDocuments, uploadDocument, UploadResult, Citation } from '@/lib/api';
 import CitationCard from './CitationCard';
 import ScholarMindLogo from './ScholarMindLogo';
@@ -36,8 +36,12 @@ interface Props {
   pendingMessage?: string | null;
   onPendingConsumed?: () => void;
   sessionId: string | null;
+  sessionTitle?: string;
   onSessionUpdate?: (title: string, preview: string) => void;
   onMessagesChange?: (messages: Message[]) => void;
+  onPinSession?: () => void;
+  onRenameSession?: (newTitle: string) => void;
+  onDeleteSession?: () => void;
 }
 
 export default function ChatWindow({
@@ -51,8 +55,12 @@ export default function ChatWindow({
   pendingMessage,
   onPendingConsumed,
   sessionId,
+  sessionTitle,
   onSessionUpdate,
   onMessagesChange,
+  onPinSession,
+  onRenameSession,
+  onDeleteSession,
 }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -62,9 +70,13 @@ export default function ChatWindow({
   const [copiedUserIndex, setCopiedUserIndex] = useState<number | null>(null);
   const [expandedCitations, setExpandedCitations] = useState<Set<number>>(new Set());
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [titleMenuOpen, setTitleMenuOpen] = useState(false);
+  const [renamingTitle, setRenamingTitle] = useState(false);
+  const [renameTitleValue, setRenameTitleValue] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const titleMenuRef = useRef<HTMLDivElement>(null);
 
   const initials = username ? username.slice(0, 2).toUpperCase() : 'U';
   const hasDoc = selectedDocIds.length > 0;
@@ -99,6 +111,24 @@ export default function ChatWindow({
   // onMessagesChange excluded intentionally — it's a stable callback ref from page.tsx
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, userId, sessionId]);
+
+  useEffect(() => {
+    if (!titleMenuOpen) return;
+    function onDown(e: MouseEvent) {
+      if (titleMenuRef.current && !titleMenuRef.current.contains(e.target as Node)) {
+        setTitleMenuOpen(false);
+      }
+    }
+    function onKey(e: globalThis.KeyboardEvent) {
+      if (e.key === 'Escape') setTitleMenuOpen(false);
+    }
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [titleMenuOpen]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -263,14 +293,68 @@ export default function ChatWindow({
     >
       {/* Header */}
       <div className="px-5 py-3 border-b border-[#2a2a2a] flex items-center gap-2 shrink-0">
-        <span className={`w-2 h-2 rounded-full ${hasDoc ? 'bg-white' : 'bg-[#2a2a2a]'}`} />
-        <span className="text-sm font-medium text-white">
-          {hasDoc
-            ? selectedDocIds.length === 1
-              ? (docs.find((d) => d.documentId === selectedDocIds[0])?.filename || 'Document loaded')
-              : `${selectedDocIds.length} documents selected`
-            : 'Upload or select a document'}
-        </span>
+        <div ref={titleMenuRef} className="relative flex items-center gap-1 group">
+          {renamingTitle ? (
+            <input
+              autoFocus
+              value={renameTitleValue}
+              onChange={(e) => setRenameTitleValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  if (renameTitleValue.trim()) onRenameSession?.(renameTitleValue.trim());
+                  setRenamingTitle(false);
+                }
+                if (e.key === 'Escape') setRenamingTitle(false);
+              }}
+              onBlur={() => {
+                if (renameTitleValue.trim()) onRenameSession?.(renameTitleValue.trim());
+                setRenamingTitle(false);
+              }}
+              className="bg-transparent text-[14px] text-[#8a8a8a] focus:outline-none border-b border-white/30 min-w-[120px]"
+            />
+          ) : (
+            <button
+              onClick={() => setTitleMenuOpen((v) => !v)}
+              className="flex items-center gap-1 text-[14px] text-[#8a8a8a] hover:text-white transition-colors cursor-pointer"
+            >
+              <span>{sessionTitle || 'New conversation'}</span>
+              <ChevronDown className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </button>
+          )}
+
+          {titleMenuOpen && (
+            <div className="absolute left-0 top-full mt-1 w-36 bg-[#1c1c1c] border border-[#2a2a2a] rounded-lg shadow-xl z-50 py-1 overflow-hidden">
+              <button
+                onClick={() => { onPinSession?.(); setTitleMenuOpen(false); }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-[#9b9b9b] hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+              >
+                <Pin className="w-3 h-3" />
+                Pin
+              </button>
+              <button
+                onClick={() => {
+                  setRenameTitleValue(sessionTitle || '');
+                  setRenamingTitle(true);
+                  setTitleMenuOpen(false);
+                }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-[#9b9b9b] hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+              >
+                <Pencil className="w-3 h-3" />
+                Rename
+              </button>
+              <button
+                onClick={() => {
+                  setTitleMenuOpen(false);
+                  if (window.confirm('Delete this chat?')) onDeleteSession?.();
+                }}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-red-400 hover:text-red-300 hover:bg-red-400/10 transition-colors cursor-pointer"
+              >
+                <Trash2 className="w-3 h-3" />
+                Delete
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Messages — centered column */}
@@ -306,7 +390,7 @@ export default function ChatWindow({
                   {msg.role === 'user' ? (
                     <>
                       <div className="flex items-end gap-2.5">
-                        <div className="bg-[#1c1c1c] border border-[#2a2a2a] text-white px-4 py-3 rounded-2xl rounded-br-sm text-[15px] leading-[1.75] max-w-xl">
+                        <div className="bg-[#1c1c1c] border border-[#2a2a2a] text-white px-4 py-3 rounded-2xl rounded-br-sm text-base leading-relaxed max-w-xl">
                           {msg.content}
                         </div>
                         <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center shrink-0 mb-0.5">
@@ -334,7 +418,7 @@ export default function ChatWindow({
                     </>
                   ) : (
                     <div className="flex flex-col gap-2">
-                      <div className="pl-3 border-l-2 border-white/20 text-white text-[15px] leading-[1.75]">
+                      <div className="pl-3 border-l-2 border-white/20 text-white text-base leading-relaxed">
                         {draft.content}
                       </div>
 
@@ -505,7 +589,7 @@ export default function ChatWindow({
               placeholder={hasDoc ? 'Ask anything about your document...' : 'Upload or select a document first...'}
               rows={1}
               disabled={loading || !hasDoc}
-              className="flex-1 bg-transparent text-[15px] text-white placeholder-[#6b6b6b] resize-none focus:outline-none min-h-[28px] py-0 disabled:opacity-50"
+              className="flex-1 bg-transparent text-base text-white placeholder-[#6b6b6b] resize-none focus:outline-none min-h-[28px] py-0 disabled:opacity-50"
             />
             <button
               onClick={() => sendMessage()}

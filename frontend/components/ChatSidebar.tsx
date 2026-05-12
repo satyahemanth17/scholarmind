@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { PanelLeftClose, PanelLeft, Plus, Search, MessageSquare, ChevronDown, Pin, PinOff, Pencil, Trash2 } from 'lucide-react';
+import { PanelLeftClose, PanelLeft, Plus, Search, MessageSquare, MoreHorizontal, Pin, PinOff, Pencil, Trash2 } from 'lucide-react';
 
 export interface ChatSession {
   id: string;
@@ -243,7 +243,7 @@ export default function ChatSidebar({
                       className="p-1 rounded text-[#6b6b6b] hover:text-white transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
                       title="More options"
                     >
-                      <ChevronDown className="w-3.5 h-3.5" />
+                      <MoreHorizontal className="w-3.5 h-3.5" />
                     </button>
 
                     {menuOpenId === session.id && (

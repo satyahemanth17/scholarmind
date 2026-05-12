@@ -395,8 +395,12 @@ export default function Home() {
                 pendingMessage={pendingMessage}
                 onPendingConsumed={() => setPendingMessage(null)}
                 sessionId={currentSessionId}
+                sessionTitle={sessions.find((s) => s.id === currentSessionId)?.title}
                 onSessionUpdate={handleSessionUpdate}
                 onMessagesChange={handleMessagesChange}
+                onPinSession={currentSessionId ? () => handlePinSession(currentSessionId) : undefined}
+                onRenameSession={currentSessionId ? (t) => handleRenameSession(currentSessionId, t) : undefined}
+                onDeleteSession={currentSessionId ? () => { handleDeleteSession(currentSessionId); } : undefined}
               />
             )}
 
@@ -409,7 +413,7 @@ export default function Home() {
                   <div className="flex items-center gap-2">
                     <Network className="w-4 h-4 text-[#6366f1]" />
                     <span className="text-sm font-medium text-white">
-                      {activeDocId ? (activeDocName || 'Document loaded') : 'Select a document to start'}
+                      {activeDocId ? (activeDocName || 'Document loaded') : 'Upload a document to start'}
                     </span>
                     {activeDocId && graphCache[activeDocId] && (
                       <span className="text-xs text-[#6b6b6b]">

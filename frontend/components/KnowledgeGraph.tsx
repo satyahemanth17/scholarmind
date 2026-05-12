@@ -27,6 +27,7 @@ export default function KnowledgeGraph({ data, loading, onNodeClick }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; node: SimNode } | null>(null);
   const onNodeClickRef = useRef(onNodeClick);
+  const clickInProgress = useRef(false);
   useEffect(() => { onNodeClickRef.current = onNodeClick; }, [onNodeClick]);
 
   useEffect(() => {
@@ -108,6 +109,9 @@ export default function KnowledgeGraph({ data, loading, onNodeClick }: Props) {
       .attr('cursor', 'pointer')
       .call(drag as unknown as (sel: d3.Selection<SVGCircleElement, SimNode, SVGGElement, unknown>) => void)
       .on('click', (_event, d) => {
+        if (clickInProgress.current) return;
+        clickInProgress.current = true;
+        setTimeout(() => { clickInProgress.current = false; }, 1000);
         onNodeClickRef.current?.(d.label);
       })
       .on('mouseenter', (event, d) => {
