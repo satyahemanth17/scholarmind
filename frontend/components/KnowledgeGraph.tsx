@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 import { GraphData, GraphNode } from '@/lib/api';
 
@@ -26,6 +26,8 @@ const TOPIC_COLORS = ['#a3a3a3', '#6366f1', '#f59e0b', '#ef4444', '#8b5cf6', '#0
 export default function KnowledgeGraph({ data, loading, onNodeClick }: Props) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; node: SimNode } | null>(null);
+  const onNodeClickRef = useRef(onNodeClick);
+  useEffect(() => { onNodeClickRef.current = onNodeClick; }, [onNodeClick]);
 
   useEffect(() => {
     if (!data || !svgRef.current || data.nodes.length === 0) return;
@@ -106,7 +108,7 @@ export default function KnowledgeGraph({ data, loading, onNodeClick }: Props) {
       .attr('cursor', 'pointer')
       .call(drag as unknown as (sel: d3.Selection<SVGCircleElement, SimNode, SVGGElement, unknown>) => void)
       .on('click', (_event, d) => {
-        onNodeClick?.(d.label);
+        onNodeClickRef.current?.(d.label);
       })
       .on('mouseenter', (event, d) => {
         const rect = svgEl.getBoundingClientRect();
@@ -146,7 +148,7 @@ export default function KnowledgeGraph({ data, loading, onNodeClick }: Props) {
     });
 
     return () => { simulation.stop(); };
-  }, [data, onNodeClick]);
+  }, [data]);
 
   if (loading) {
     return (

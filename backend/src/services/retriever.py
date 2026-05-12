@@ -41,12 +41,25 @@ def similaritySearch(
         "match_chunks",
         {
             "query_embedding": query_embedding,
-            "match_threshold": 0.3,
+            "match_threshold": 0.05,
             "match_count": match_count,
             "filter_user_id": user_id,
         },
     ).execute()
-    return result.data or []
+    rows = result.data or []
+    # Retry with lower threshold if nothing returned
+    if not rows:
+        result = client.rpc(
+            "match_chunks",
+            {
+                "query_embedding": query_embedding,
+                "match_threshold": 0.01,
+                "match_count": match_count,
+                "filter_user_id": user_id,
+            },
+        ).execute()
+        rows = result.data or []
+    return rows
 
 
 def fetchDocumentChunks(document_id: str, limit: int = 30) -> list[dict]:

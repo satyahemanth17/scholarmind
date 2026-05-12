@@ -181,10 +181,10 @@ export default function Home() {
     setGraphLoading(false);
   }
 
-  function sendToChat(message: string) {
+  const sendToChat = useCallback((message: string) => {
     setPendingMessage(message);
     setActiveTab('chat');
-  }
+  }, []);
 
   // Session management
   const handleNewChat = useCallback(() => {

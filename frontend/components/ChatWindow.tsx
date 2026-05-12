@@ -285,7 +285,7 @@ export default function ChatWindow({
           </div>
         )}
 
-        <div className="max-w-2xl mx-auto px-4 space-y-6">
+        <div className="max-w-3xl mx-auto px-6 space-y-8">
           {messages.map((msg, i) => {
             const draft = getActiveDraft(msg);
             const draftCount = msg.drafts?.length ?? 0;
@@ -305,7 +305,7 @@ export default function ChatWindow({
                   {msg.role === 'user' ? (
                     <>
                       <div className="flex items-end gap-2.5">
-                        <div className="bg-[#1c1c1c] border border-[#2a2a2a] text-white px-4 py-2.5 rounded-2xl rounded-br-sm text-sm leading-relaxed max-w-lg">
+                        <div className="bg-[#1c1c1c] border border-[#2a2a2a] text-white px-4 py-3 rounded-2xl rounded-br-sm text-[15px] leading-[1.75] max-w-xl">
                           {msg.content}
                         </div>
                         <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center shrink-0 mb-0.5">
@@ -333,7 +333,7 @@ export default function ChatWindow({
                     </>
                   ) : (
                     <div className="flex flex-col gap-2">
-                      <div className="pl-3 border-l-2 border-white/20 text-white text-sm leading-relaxed">
+                      <div className="pl-3 border-l-2 border-white/20 text-white text-[15px] leading-[1.75]">
                         {draft.content}
                       </div>
 
@@ -423,7 +423,7 @@ export default function ChatWindow({
 
       {/* Input area — centered */}
       <div className="border-t border-[#2a2a2a] shrink-0 py-3 px-4">
-        <div className="max-w-2xl mx-auto space-y-2">
+        <div className="max-w-3xl mx-auto space-y-2 px-2">
           {/* PDF pills */}
           {docs.length > 0 && (
             <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
@@ -472,7 +472,7 @@ export default function ChatWindow({
 
           {/* Input bar */}
           <div
-            className={`flex items-end gap-2 bg-[#141414] border rounded-2xl px-3 py-2.5 transition-colors ${
+            className={`flex items-end gap-3 bg-[#141414] border rounded-3xl px-4 py-4 transition-colors min-h-[56px] ${
               hasDoc ? 'border-[#2a2a2a] focus-within:border-white/30' : 'border-[#2a2a2a] opacity-60'
             } ${editingIndex !== null ? 'border-white/25' : ''}`}
           >
@@ -504,7 +504,7 @@ export default function ChatWindow({
               placeholder={hasDoc ? 'Ask anything about your document...' : 'Upload or select a document first...'}
               rows={1}
               disabled={loading || !hasDoc}
-              className="flex-1 bg-transparent text-sm text-white placeholder-[#6b6b6b] resize-none focus:outline-none min-h-[28px] py-0.5 disabled:opacity-50"
+              className="flex-1 bg-transparent text-[15px] text-white placeholder-[#6b6b6b] resize-none focus:outline-none min-h-[28px] py-0 disabled:opacity-50"
             />
             <button
               onClick={() => sendMessage()}
