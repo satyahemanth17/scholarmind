@@ -189,15 +189,19 @@ export default function Home() {
   // Session management
   const handleNewChat = useCallback(() => {
     setCurrentSessionId(crypto.randomUUID());
+    setDocs([]);
+    setSelectedDocIds([]);
     setActiveTab('chat');
   }, []);
 
   const handleSelectSession = useCallback((id: string) => {
     const session = sessions.find((s) => s.id === id);
     if (!session) return;
-    // Ensure messages from the sessions state (Supabase) are in localStorage
-    // so ChatWindow reads them on remount. This is a no-op if already current.
-    if (auth && Array.isArray(session.messages)) {
+    // Only sync messages from sessions state to localStorage for non-guest users
+    // (Supabase is the source of truth). Guest messages already live in localStorage
+    // and must not be overwritten with the empty sessions-state messages field.
+    const isGuest = auth?.userId.startsWith('guest-');
+    if (!isGuest && auth && Array.isArray(session.messages) && session.messages.length > 0) {
       try {
         localStorage.setItem(
           `scholarmind-session-msgs-${auth.userId}-${id}`,
@@ -206,11 +210,8 @@ export default function Home() {
       } catch {}
     }
     setCurrentSessionId(id);
-    if (session.documentIds.length > 0) {
-      setSelectedDocIds(session.documentIds.filter((did) => docs.some((d) => d.documentId === did)));
-    }
     setActiveTab('chat');
-  }, [sessions, docs, auth]);
+  }, [sessions, auth]);
 
   const handleDeleteSession = useCallback((id: string) => {
     setSessions((prev) => prev.filter((s) => s.id !== id));
@@ -306,7 +307,7 @@ export default function Home() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex flex-col">
+    <div className="h-screen overflow-hidden bg-[#0a0a0a] flex flex-col">
       <header className="border-b border-[#2a2a2a] px-6 py-4 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
@@ -387,8 +388,6 @@ export default function Home() {
                 key={currentSessionId ?? 'no-session'}
                 userId={auth.userId}
                 docs={docs}
-                selectedDocIds={selectedDocIds}
-                onToggleDoc={handleToggleDoc}
                 onDeleteDoc={handleDeleteDoc}
                 onUploadSuccess={handleUploadSuccess}
                 username={auth.username}

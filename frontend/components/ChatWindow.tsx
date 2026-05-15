@@ -28,8 +28,6 @@ export interface Message {
 interface Props {
   userId: string;
   docs: UploadedDoc[];
-  selectedDocIds: string[];
-  onToggleDoc: (id: string) => void;
   onDeleteDoc: (id: string) => void;
   onUploadSuccess: (result: UploadResult, filename: string) => void;
   username?: string;
@@ -47,8 +45,6 @@ interface Props {
 export default function ChatWindow({
   userId,
   docs,
-  selectedDocIds,
-  onToggleDoc,
   onDeleteDoc,
   onUploadSuccess,
   username,
@@ -77,9 +73,10 @@ export default function ChatWindow({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const titleMenuRef = useRef<HTMLDivElement>(null);
+  const sendingRef = useRef(false);
 
   const initials = username ? username.slice(0, 2).toUpperCase() : 'U';
-  const hasDoc = selectedDocIds.length > 0;
+  const hasDoc = docs.length > 0;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -139,7 +136,8 @@ export default function ChatWindow({
 
   const sendMessage = useCallback(async (overrideContent?: string) => {
     const query = overrideContent ?? input.trim();
-    if (!query || loading || !hasDoc) return;
+    if (!query || loading || !hasDoc || sendingRef.current) return;
+    sendingRef.current = true;
     if (!overrideContent) setInput('');
 
     let baseMessages = messages;
@@ -159,7 +157,8 @@ export default function ChatWindow({
     }
 
     try {
-      const result = await queryDocuments(query, userId, selectedDocIds);
+      const docIds = docs.map((d) => d.documentId);
+      const result = await queryDocuments(query, userId, docIds);
       const draft: Draft = { content: result.answer, citations: result.citations };
       setMessages((prev) => [
         ...prev,
@@ -179,8 +178,9 @@ export default function ChatWindow({
       ]);
     } finally {
       setLoading(false);
+      sendingRef.current = false;
     }
-  }, [input, loading, hasDoc, messages, editingIndex, userId, selectedDocIds, onSessionUpdate]);
+  }, [input, loading, hasDoc, messages, editingIndex, userId, docs, onSessionUpdate]);
 
   useEffect(() => {
     if (!pendingMessage || loading || !hasDoc) return;
@@ -198,7 +198,7 @@ export default function ChatWindow({
     if (!userQuery) return;
     setLoading(true);
     try {
-      const result = await queryDocuments(userQuery, userId, selectedDocIds);
+      const result = await queryDocuments(userQuery, userId, docs.map((d) => d.documentId));
       const newDraft: Draft = { content: result.answer, citations: result.citations };
       setMessages((prev) =>
         prev.map((msg, i) => {
@@ -512,36 +512,21 @@ export default function ChatWindow({
           {/* PDF pills */}
           {docs.length > 0 && (
             <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-              {docs.map((doc) => {
-                const isSelected = selectedDocIds.includes(doc.documentId);
-                return (
-                  <div
-                    key={doc.documentId}
-                    className={`flex items-center gap-1.5 shrink-0 rounded-full border px-2 py-1 text-xs transition-colors ${
-                      isSelected
-                        ? 'bg-white/10 border-white/30 text-white'
-                        : 'bg-[#141414] border-[#2a2a2a] text-[#6b6b6b]'
-                    }`}
+              {docs.map((doc) => (
+                <div
+                  key={doc.documentId}
+                  className="flex items-center gap-1.5 shrink-0 rounded-full border px-2 py-1 text-xs bg-white/10 border-white/30 text-white"
+                >
+                  <FileText className="w-3 h-3 shrink-0" />
+                  <span>{truncateName(doc.filename)}</span>
+                  <button
+                    onClick={() => onDeleteDoc(doc.documentId)}
+                    className="text-[#6b6b6b] hover:text-red-400 transition-colors ml-0.5 cursor-pointer"
                   >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => onToggleDoc(doc.documentId)}
-                      className="w-3 h-3 cursor-pointer accent-white"
-                    />
-                    <FileText className="w-3 h-3 shrink-0" />
-                    <span className="cursor-pointer" onClick={() => onToggleDoc(doc.documentId)}>
-                      {truncateName(doc.filename)}
-                    </span>
-                    <button
-                      onClick={() => onDeleteDoc(doc.documentId)}
-                      className="text-[#6b6b6b] hover:text-red-400 transition-colors ml-0.5 cursor-pointer"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                );
-              })}
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
             </div>
           )}
 
