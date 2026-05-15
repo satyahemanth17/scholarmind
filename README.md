@@ -1,16 +1,25 @@
 # ScholarMind
 
-Production RAG AI study platform. Upload PDFs, ask questions with cited answers, generate quizzes — powered by LangChain, LangGraph, and OpenAI on AWS Lambda.
+Production RAG AI study platform. Upload PDFs, ask questions with cited answers, explore concepts visually, and generate quizzes — powered by LangChain, LangGraph, and OpenAI on AWS Lambda.
+
+## Features
+
+- **Cited answers** — RAG pipeline retrieves top-5 chunks and cites page sources
+- **Knowledge Graph** — D3 force graph of concepts extracted from your document; click any node to ask about it
+- **Chat sessions** — persistent conversation history synced to Supabase per user
+- **Quiz mode** — auto-generated multiple-choice questions from document content
+- **Mastery dashboard** — tracks which topics you've covered across sessions
 
 ## Architecture
 
 ```
 PDF Upload → S3 + pgvector (Supabase)
 Query → Embedding → Similarity Search → LangGraph Agent → Cited Answer
+Knowledge Graph → gpt-4o concept extraction → D3 force-directed visualization
 Quiz → Chunk Retrieval → gpt-4o → Multiple-Choice Questions
 ```
 
-**Stack:** Next.js 16 · FastAPI + Mangum · LangChain · LangGraph · OpenAI gpt-4o · pgvector · AWS Lambda · Serverless Framework
+**Stack:** Next.js 14 · FastAPI + Mangum · LangChain · LangGraph · OpenAI gpt-4o · pgvector · AWS Lambda · Serverless Framework
 
 ## RAG Pipeline
 
@@ -70,4 +79,8 @@ LANGCHAIN_PROJECT=scholarmind
 | POST | /upload | Upload PDF, chunk + embed + store |
 | POST | /query | RAG query with cited answer |
 | POST | /quiz | Generate multiple-choice quiz |
+| GET | /sessions/{user_id} | List chat sessions |
+| POST | /sessions | Create session |
+| PUT | /sessions/{session_id} | Update session (messages, docs, title) |
+| DELETE | /sessions/{session_id} | Delete session |
 | POST | /graphql | GraphQL health endpoint |
