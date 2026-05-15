@@ -33,6 +33,7 @@ export default function Home() {
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<ActiveTab>('chat');
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+  const [pendingNodeMessage, setPendingNodeMessage] = useState<string | null>(null);
   const [graphCache, setGraphCache] = useState<Record<string, GraphData>>({});
   const [graphLoading, setGraphLoading] = useState(false);
 
@@ -85,6 +86,12 @@ export default function Home() {
       // GitHub user: fetch sessions from Supabase
       fetchSessions(currentAuth.userId)
         .then((apiSessions) => {
+          console.log('[ScholarMind] SESSIONS FROM SUPABASE', apiSessions.map((s) => ({
+            id: s.id,
+            title: s.title,
+            messageCount: Array.isArray(s.messages) ? s.messages.length : 0,
+            docCount: Array.isArray(s.documents_metadata) ? s.documents_metadata.length : 0,
+          })));
           const mapped: ChatSession[] = apiSessions.map((s) => ({
             id: s.id,
             title: s.title,
@@ -99,10 +106,12 @@ export default function Home() {
           // Cache messages + docs metadata per-session in localStorage for ChatWindow
           apiSessions.forEach((s) => {
             try {
-              localStorage.setItem(
-                `scholarmind-session-msgs-${currentAuth.userId}-${s.id}`,
-                JSON.stringify(Array.isArray(s.messages) ? s.messages : []),
-              );
+              if (Array.isArray(s.messages) && s.messages.length > 0) {
+                localStorage.setItem(
+                  `scholarmind-session-msgs-${currentAuth.userId}-${s.id}`,
+                  JSON.stringify(s.messages),
+                );
+              }
               // Cache docs metadata so filenames restore correctly
               if (Array.isArray(s.documents_metadata) && s.documents_metadata.length > 0) {
                 localStorage.setItem(
@@ -234,7 +243,7 @@ export default function Home() {
     setActiveTab('chat');
   }, [auth, currentSessionId, docs]);
 
-  const handleSelectSession = useCallback((id: string) => {
+  const handleSelectSession = useCallback(async (id: string) => {
     const session = sessions.find((s) => s.id === id);
     if (!session) return;
     if (id === currentSessionId) return;
@@ -244,7 +253,62 @@ export default function Home() {
       saveSessionDocs(auth.userId, currentSessionId, docs);
     }
 
-    // Restore target session's docs
+    const isGuest = auth?.userId.startsWith('guest-');
+
+    // For GitHub users: fetch fresh session data from backend to get latest messages
+    if (!isGuest && auth) {
+      try {
+        const freshSessions = await fetchSessions(auth.userId);
+        const target = freshSessions.find((s) => s.id === id);
+        console.log('[ScholarMind] LOADING SESSION (fresh from API)', {
+          sessionId: id,
+          messageCount: target?.messages?.length ?? 0,
+          messages: target?.messages,
+          docs: target?.documents_metadata,
+        });
+        // Cache all fresh session data to localStorage
+        freshSessions.forEach((s) => {
+          try {
+            if (Array.isArray(s.messages) && s.messages.length > 0) {
+              localStorage.setItem(
+                `scholarmind-session-msgs-${auth.userId}-${s.id}`,
+                JSON.stringify(s.messages),
+              );
+            }
+            if (Array.isArray(s.documents_metadata) && s.documents_metadata.length > 0) {
+              localStorage.setItem(
+                `scholarmind-session-docs-${auth.userId}-${s.id}`,
+                JSON.stringify(s.documents_metadata),
+              );
+            }
+          } catch {}
+        });
+        // Update sessions state with fresh data
+        setSessions(freshSessions.map((s) => ({
+          id: s.id,
+          title: s.title,
+          preview: s.preview,
+          documentIds: s.document_ids,
+          createdAt: s.created_at,
+          updatedAt: s.updated_at,
+          pinned: s.is_pinned,
+          messages: s.messages,
+        })));
+      } catch (err) {
+        console.error('[ScholarMind] Failed to fetch fresh sessions:', err);
+        // Fallback: use sessions state cache
+        if (Array.isArray(session.messages) && session.messages.length > 0) {
+          try {
+            localStorage.setItem(
+              `scholarmind-session-msgs-${auth.userId}-${id}`,
+              JSON.stringify(session.messages),
+            );
+          } catch {}
+        }
+      }
+    }
+
+    // Restore target session's docs from localStorage (updated above if fresh fetch succeeded)
     const targetDocs = auth ? loadSessionDocs(auth.userId, id) : [];
     setDocs(targetDocs);
     setSelectedDocIds(targetDocs.map((d) => d.documentId));
@@ -262,17 +326,6 @@ export default function Home() {
     }
     if (Object.keys(cachedGraphs).length > 0) setGraphCache(cachedGraphs);
     else setGraphCache({});
-
-    // GitHub users: sync messages from Supabase sessions state to localStorage
-    const isGuest = auth?.userId.startsWith('guest-');
-    if (!isGuest && auth && Array.isArray(session.messages) && session.messages.length > 0) {
-      try {
-        localStorage.setItem(
-          `scholarmind-session-msgs-${auth.userId}-${id}`,
-          JSON.stringify(session.messages),
-        );
-      } catch {}
-    }
 
     setCurrentSessionId(id);
     setActiveTab('chat');
@@ -358,9 +411,12 @@ export default function Home() {
   }, [currentSessionId, docs, auth]);
 
   // Immediate messages sync to Supabase + sessions state (GitHub users only)
+  // Guard: skip empty messages to prevent wiping Supabase on initial mount
   const handleMessagesChange = useCallback((msgs: Message[]) => {
     if (!auth || auth.userId.startsWith('guest-') || !currentSessionIdRef.current) return;
+    if (msgs.length === 0) return;
     const sid = currentSessionIdRef.current;
+    console.log('[ScholarMind] SYNCING TO SUPABASE', { sessionId: sid, messageCount: msgs.length });
     updateSession(sid, { messages: msgs as unknown[] }).catch(() => {});
     // Keep sessions state current so handleSelectSession has fresh messages
     setSessions((prev) =>
@@ -465,6 +521,8 @@ export default function Home() {
                 username={auth.username}
                 pendingMessage={pendingMessage}
                 onPendingConsumed={() => setPendingMessage(null)}
+                pendingNodeMessage={pendingNodeMessage}
+                onNodeMessageConsumed={() => setPendingNodeMessage(null)}
                 sessionId={currentSessionId}
                 sessionTitle={sessions.find((s) => s.id === currentSessionId)?.title}
                 onSessionUpdate={handleSessionUpdate}
@@ -511,7 +569,11 @@ export default function Home() {
                   <KnowledgeGraph
                     data={activeDocId ? (graphCache[activeDocId] ?? null) : null}
                     loading={graphLoading}
-                    onNodeClick={(label) => sendToChat(`Explain "${label}" in detail`)}
+                    onNodeClick={(label) => {
+                      console.log('[ScholarMind] NODE CLICK received in page.tsx, label:', label, 'docs:', docs.length);
+                      setActiveTab('chat');
+                      setPendingNodeMessage(`Explain "${label}" in detail`);
+                    }}
                   />
                 </div>
               </div>

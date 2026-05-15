@@ -109,6 +109,8 @@ export default function KnowledgeGraph({ data, loading, onNodeClick }: Props) {
       .attr('cursor', 'pointer')
       .call(drag as unknown as (sel: d3.Selection<SVGCircleElement, SimNode, SVGGElement, unknown>) => void)
       .on('click', (_event, d) => {
+        console.log('[ScholarMind] NODE CLICKED:', d.label);
+        console.log('[ScholarMind] CALLING onNodeClick with:', d.label);
         if (clickInProgress.current) return;
         clickInProgress.current = true;
         setTimeout(() => { clickInProgress.current = false; }, 1000);

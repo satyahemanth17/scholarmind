@@ -33,6 +33,8 @@ interface Props {
   username?: string;
   pendingMessage?: string | null;
   onPendingConsumed?: () => void;
+  pendingNodeMessage?: string | null;
+  onNodeMessageConsumed?: () => void;
   sessionId: string | null;
   sessionTitle?: string;
   onSessionUpdate?: (title: string, preview: string) => void;
@@ -50,6 +52,8 @@ export default function ChatWindow({
   username,
   pendingMessage,
   onPendingConsumed,
+  pendingNodeMessage,
+  onNodeMessageConsumed,
   sessionId,
   sessionTitle,
   onSessionUpdate,
@@ -106,11 +110,13 @@ export default function ChatWindow({
   }, [sessionId, userId]);
 
   // Save messages whenever they change (localStorage + notify parent for Supabase sync)
+  // Guard: skip empty messages to prevent wiping stored data on initial mount
   useEffect(() => {
-    if (!sessionId) return;
+    if (!sessionId || messages.length === 0) return;
     try {
       localStorage.setItem(`scholarmind-session-msgs-${userId}-${sessionId}`, JSON.stringify(messages));
     } catch {}
+    console.log('[ScholarMind] SAVING SESSION', { sessionId, messageCount: messages.length });
     onMessagesChange?.(messages);
   // onMessagesChange excluded intentionally — it's a stable callback ref from page.tsx
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -195,6 +201,54 @@ export default function ChatWindow({
     sendMessage(pendingMessage);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingMessage]);
+
+  // Dedicated effect for knowledge graph node clicks.
+  // Explicitly adds the user bubble FIRST (via ref, synchronously), then calls the API.
+  // This avoids the React batching race condition in the pendingMessage → sendMessage path.
+  useEffect(() => {
+    if (!pendingNodeMessage || loading || !hasDoc || sendingRef.current) return;
+    onNodeMessageConsumed?.();
+
+    const query = pendingNodeMessage;
+    const baseMessages = messagesRef.current;
+
+    console.log('[ScholarMind] MESSAGES BEFORE node query:', baseMessages.length);
+
+    // Step 1: add user bubble immediately and synchronously update the ref
+    const withUser: Message[] = [...baseMessages, { role: 'user' as const, content: query }];
+    messagesRef.current = withUser;
+    setMessages(withUser);
+
+    // First message in session: set title
+    if (baseMessages.length === 0 && onSessionUpdate) {
+      const title = query.trim().split(/\s+/).slice(0, 6).join(' ');
+      onSessionUpdate(title, query.slice(0, 120));
+    }
+
+    // Step 2: call API and append assistant response
+    sendingRef.current = true;
+    setLoading(true);
+    queryDocuments(query, userId, docs.map((d) => d.documentId))
+      .then((result) => {
+        const draft: Draft = { content: result.answer, citations: result.citations };
+        setMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: result.answer, citations: result.citations, drafts: [draft], activeDraftIndex: 0 },
+        ]);
+      })
+      .catch((err) => {
+        const msg = err instanceof Error ? err.message : 'Error generating answer. Please try again.';
+        setMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: msg, drafts: [{ content: msg }], activeDraftIndex: 0 },
+        ]);
+      })
+      .finally(() => {
+        setLoading(false);
+        sendingRef.current = false;
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingNodeMessage]);
 
   async function retryMessage(msgIndex: number) {
     if (loading) return;
