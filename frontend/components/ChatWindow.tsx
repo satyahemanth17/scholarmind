@@ -208,20 +208,11 @@ export default function ChatWindow({
   // Explicitly adds the user bubble FIRST (via ref, synchronously), then calls the API.
   // This avoids the React batching race condition in the pendingMessage → sendMessage path.
   useEffect(() => {
-    console.log('EFFECT RUNS:', {
-      pendingNodeMessage,
-      loading,
-      hasDoc,
-      sendingRef: sendingRef.current,
-      docsLength: docs.length
-    })
     if (!pendingNodeMessage || loading || sendingRef.current) return;
     onNodeMessageConsumed?.();
 
     const query = pendingNodeMessage;
     const baseMessages = messagesRef.current;
-
-    console.log('[ScholarMind] MESSAGES BEFORE node query:', baseMessages.length);
 
     // Step 1: add user bubble immediately and synchronously update the ref
     const withUser: Message[] = [...baseMessages, { role: 'user' as const, content: query }];
