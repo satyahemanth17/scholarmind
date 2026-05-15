@@ -116,6 +116,7 @@ export interface SessionApiData {
   title: string;
   preview: string;
   document_ids: string[];
+  documents_metadata?: unknown[];
   is_pinned: boolean;
   messages: unknown[];
   created_at: string;
@@ -135,6 +136,7 @@ export async function createSession(data: {
   preview: string;
   messages: unknown[];
   document_ids: string[];
+  documents_metadata?: unknown[];
   is_pinned: boolean;
 }): Promise<SessionApiData> {
   const res = await fetch(`${API_BASE}/sessions`, {
@@ -153,6 +155,7 @@ export async function updateSession(
     preview: string;
     messages: unknown[];
     document_ids: string[];
+    documents_metadata: unknown[];
     is_pinned: boolean;
   }>,
 ): Promise<void> {

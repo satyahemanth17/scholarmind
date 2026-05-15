@@ -74,6 +74,7 @@ export default function ChatWindow({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const titleMenuRef = useRef<HTMLDivElement>(null);
   const sendingRef = useRef(false);
+  const messagesRef = useRef<Message[]>([]);
 
   const initials = username ? username.slice(0, 2).toUpperCase() : 'U';
   const hasDoc = docs.length > 0;
@@ -82,16 +83,22 @@ export default function ChatWindow({
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+
   // Load messages when sessionId changes
   useEffect(() => {
     if (!sessionId) {
+      messagesRef.current = [];
       setMessages([]);
       return;
     }
     try {
       const saved = localStorage.getItem(`scholarmind-session-msgs-${userId}-${sessionId}`);
-      setMessages(saved ? JSON.parse(saved) : []);
+      const loaded: Message[] = saved ? JSON.parse(saved) : [];
+      messagesRef.current = loaded;
+      setMessages(loaded);
     } catch {
+      messagesRef.current = [];
       setMessages([]);
     }
     setEditingIndex(null);
@@ -140,9 +147,9 @@ export default function ChatWindow({
     sendingRef.current = true;
     if (!overrideContent) setInput('');
 
-    let baseMessages = messages;
+    let baseMessages = messagesRef.current;
     if (editingIndex !== null) {
-      baseMessages = messages.slice(0, editingIndex);
+      baseMessages = messagesRef.current.slice(0, editingIndex);
       setEditingIndex(null);
     }
 
@@ -180,7 +187,7 @@ export default function ChatWindow({
       setLoading(false);
       sendingRef.current = false;
     }
-  }, [input, loading, hasDoc, messages, editingIndex, userId, docs, onSessionUpdate]);
+  }, [input, loading, hasDoc, editingIndex, userId, docs, onSessionUpdate]);
 
   useEffect(() => {
     if (!pendingMessage || loading || !hasDoc) return;

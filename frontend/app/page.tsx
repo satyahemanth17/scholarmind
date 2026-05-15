@@ -45,29 +45,25 @@ export default function Home() {
   const activeDocId = selectedDocIds[0] ?? null;
   const activeDocName = docs.find((d) => d.documentId === activeDocId)?.filename;
 
-  // Load auth, docs, and sessions on mount
+  // Helpers: per-session doc persistence in localStorage
+  function saveSessionDocs(userId: string, sessionId: string, docsToSave: UploadedDoc[]) {
+    try {
+      localStorage.setItem(`scholarmind-session-docs-${userId}-${sessionId}`, JSON.stringify(docsToSave));
+    } catch {}
+  }
+
+  function loadSessionDocs(userId: string, sessionId: string): UploadedDoc[] {
+    try {
+      const saved = localStorage.getItem(`scholarmind-session-docs-${userId}-${sessionId}`);
+      return saved ? (JSON.parse(saved) as UploadedDoc[]) : [];
+    } catch { return []; }
+  }
+
+  // Load auth and sessions on mount (docs load per-session via currentSessionId effect below)
   useEffect(() => {
     const currentAuth = getAuth();
     if (!currentAuth) { router.replace('/login'); return; }
     setAuth(currentAuth);
-
-    // Load docs from localStorage
-    try {
-      const saved = localStorage.getItem(`scholarmind-docs-${currentAuth.userId}`);
-      if (saved) {
-        const parsed = JSON.parse(saved) as UploadedDoc[];
-        setDocs(parsed);
-        if (parsed.length > 0) setSelectedDocIds([parsed[0].documentId]);
-        const cachedGraphs: Record<string, GraphData> = {};
-        parsed.forEach((doc) => {
-          try {
-            const cached = localStorage.getItem(`scholarmind-graph-${currentAuth.userId}-${doc.documentId}`);
-            if (cached) cachedGraphs[doc.documentId] = JSON.parse(cached);
-          } catch {}
-        });
-        setGraphCache(cachedGraphs);
-      }
-    } catch {}
 
     const isGuestUser = currentAuth.userId.startsWith('guest-');
 
@@ -100,13 +96,20 @@ export default function Home() {
             messages: s.messages,
           }));
           setSessions(mapped);
-          // Write messages to localStorage so ChatWindow can read them on session switch
+          // Cache messages + docs metadata per-session in localStorage for ChatWindow
           apiSessions.forEach((s) => {
             try {
               localStorage.setItem(
                 `scholarmind-session-msgs-${currentAuth.userId}-${s.id}`,
                 JSON.stringify(Array.isArray(s.messages) ? s.messages : []),
               );
+              // Cache docs metadata so filenames restore correctly
+              if (Array.isArray(s.documents_metadata) && s.documents_metadata.length > 0) {
+                localStorage.setItem(
+                  `scholarmind-session-docs-${currentAuth.userId}-${s.id}`,
+                  JSON.stringify(s.documents_metadata),
+                );
+              }
             } catch {}
           });
           setCurrentSessionId(mapped.length > 0 ? mapped[0].id : crypto.randomUUID());
@@ -117,13 +120,44 @@ export default function Home() {
     }
   }, [router]);
 
-  // Persist docs to localStorage
+  // Tracks the last session for which we've loaded docs (guards the save effect on mount)
+  const prevSessionIdRef = useRef<string | null>(null);
+
+  // Persist per-session docs to localStorage + Supabase (fires on upload/delete/session-switch).
+  // Guard: skip if we haven't finished loading for this session yet (prevents overwriting on mount).
   useEffect(() => {
-    if (!auth) return;
-    try {
-      localStorage.setItem(`scholarmind-docs-${auth.userId}`, JSON.stringify(docs));
-    } catch {}
-  }, [docs, auth]);
+    if (!auth || !currentSessionId) return;
+    if (prevSessionIdRef.current !== currentSessionId) return; // load effect hasn't run yet
+    saveSessionDocs(auth.userId, currentSessionId, docs);
+    if (!auth.userId.startsWith('guest-')) {
+      updateSession(currentSessionId, {
+        document_ids: docs.map((d) => d.documentId),
+        documents_metadata: docs,
+      }).catch(() => {});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [docs, auth, currentSessionId]);
+
+  // Load per-session docs when currentSessionId changes (initial mount + session restore)
+  useEffect(() => {
+    if (!auth || !currentSessionId) return;
+    if (prevSessionIdRef.current === currentSessionId) return;
+    prevSessionIdRef.current = currentSessionId;
+
+    const sessionDocs = loadSessionDocs(auth.userId, currentSessionId);
+    setDocs(sessionDocs);
+    setSelectedDocIds(sessionDocs.map((d) => d.documentId));
+    // Load graph caches for this session's docs
+    const cachedGraphs: Record<string, GraphData> = {};
+    sessionDocs.forEach((doc) => {
+      try {
+        const cached = localStorage.getItem(`scholarmind-graph-${auth.userId}-${doc.documentId}`);
+        if (cached) cachedGraphs[doc.documentId] = JSON.parse(cached);
+      } catch {}
+    });
+    if (Object.keys(cachedGraphs).length > 0) setGraphCache(cachedGraphs);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth, currentSessionId]);
 
   // Persist sessions to localStorage (guest users only — Supabase handles GitHub users)
   useEffect(() => {
@@ -188,18 +222,48 @@ export default function Home() {
 
   // Session management
   const handleNewChat = useCallback(() => {
-    setCurrentSessionId(crypto.randomUUID());
+    // Save current session's docs before clearing so it restores on switch-back
+    if (auth && currentSessionId) {
+      saveSessionDocs(auth.userId, currentSessionId, docs);
+    }
+    const newId = crypto.randomUUID();
+    prevSessionIdRef.current = newId; // prevent the load effect from overriding the empty state
     setDocs([]);
     setSelectedDocIds([]);
+    setCurrentSessionId(newId);
     setActiveTab('chat');
-  }, []);
+  }, [auth, currentSessionId, docs]);
 
   const handleSelectSession = useCallback((id: string) => {
     const session = sessions.find((s) => s.id === id);
     if (!session) return;
-    // Only sync messages from sessions state to localStorage for non-guest users
-    // (Supabase is the source of truth). Guest messages already live in localStorage
-    // and must not be overwritten with the empty sessions-state messages field.
+    if (id === currentSessionId) return;
+
+    // Save current session's docs before switching
+    if (auth && currentSessionId) {
+      saveSessionDocs(auth.userId, currentSessionId, docs);
+    }
+
+    // Restore target session's docs
+    const targetDocs = auth ? loadSessionDocs(auth.userId, id) : [];
+    setDocs(targetDocs);
+    setSelectedDocIds(targetDocs.map((d) => d.documentId));
+    prevSessionIdRef.current = id; // prevent load effect from double-loading
+
+    // Load graph caches for the restored docs
+    const cachedGraphs: Record<string, GraphData> = {};
+    if (auth) {
+      targetDocs.forEach((doc) => {
+        try {
+          const cached = localStorage.getItem(`scholarmind-graph-${auth.userId}-${doc.documentId}`);
+          if (cached) cachedGraphs[doc.documentId] = JSON.parse(cached);
+        } catch {}
+      });
+    }
+    if (Object.keys(cachedGraphs).length > 0) setGraphCache(cachedGraphs);
+    else setGraphCache({});
+
+    // GitHub users: sync messages from Supabase sessions state to localStorage
     const isGuest = auth?.userId.startsWith('guest-');
     if (!isGuest && auth && Array.isArray(session.messages) && session.messages.length > 0) {
       try {
@@ -209,9 +273,10 @@ export default function Home() {
         );
       } catch {}
     }
+
     setCurrentSessionId(id);
     setActiveTab('chat');
-  }, [sessions, auth]);
+  }, [sessions, auth, currentSessionId, docs]);
 
   const handleDeleteSession = useCallback((id: string) => {
     setSessions((prev) => prev.filter((s) => s.id !== id));
@@ -252,20 +317,26 @@ export default function Home() {
     if (!currentSessionId || !auth) return;
     const now = new Date().toISOString();
     const isGuest = auth.userId.startsWith('guest-');
+    const docIds = docs.map((d) => d.documentId);
     setSessions((prev) => {
       const existing = prev.find((s) => s.id === currentSessionId);
       const updated: ChatSession = {
         id: currentSessionId,
         title,
         preview,
-        documentIds: selectedDocIds,
+        documentIds: docIds,
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
         pinned: existing?.pinned,
       };
       if (!isGuest) {
         if (existing) {
-          updateSession(currentSessionId, { title, preview, document_ids: selectedDocIds }).catch(() => {});
+          updateSession(currentSessionId, {
+            title,
+            preview,
+            document_ids: docIds,
+            documents_metadata: docs,
+          }).catch(() => {});
         } else {
           createSession({
             id: currentSessionId,
@@ -273,7 +344,8 @@ export default function Home() {
             title,
             preview,
             messages: [],
-            document_ids: selectedDocIds,
+            document_ids: docIds,
+            documents_metadata: docs,
             is_pinned: false,
           }).catch(() => {});
         }
@@ -283,7 +355,7 @@ export default function Home() {
       }
       return [updated, ...prev];
     });
-  }, [currentSessionId, selectedDocIds, auth]);
+  }, [currentSessionId, docs, auth]);
 
   // Immediate messages sync to Supabase + sessions state (GitHub users only)
   const handleMessagesChange = useCallback((msgs: Message[]) => {

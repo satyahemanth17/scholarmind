@@ -22,6 +22,7 @@ class CreateSessionRequest(BaseModel):
     preview: str = ""
     messages: list = []
     document_ids: list[str] = []
+    documents_metadata: list = []
     is_pinned: bool = False
 
 
@@ -30,6 +31,7 @@ class UpdateSessionRequest(BaseModel):
     preview: Optional[str] = None
     messages: Optional[list] = None
     document_ids: Optional[list[str]] = None
+    documents_metadata: Optional[list] = None
     is_pinned: Optional[bool] = None
 
 
@@ -39,7 +41,7 @@ async def get_sessions(user_id: str):
         client = _get_client()
         result = (
             client.table("chat_sessions")
-            .select("id, title, preview, document_ids, is_pinned, messages, created_at, updated_at")
+            .select("id, title, preview, document_ids, documents_metadata, is_pinned, messages, created_at, updated_at")
             .eq("user_id", user_id)
             .order("updated_at", desc=True)
             .execute()
@@ -60,6 +62,7 @@ async def create_session(req: CreateSessionRequest):
             "preview": req.preview,
             "messages": req.messages,
             "document_ids": req.document_ids,
+            "documents_metadata": req.documents_metadata,
             "is_pinned": req.is_pinned,
             "created_at": now,
             "updated_at": now,
@@ -85,6 +88,8 @@ async def update_session(session_id: str, req: UpdateSessionRequest):
             updates["messages"] = req.messages
         if req.document_ids is not None:
             updates["document_ids"] = req.document_ids
+        if req.documents_metadata is not None:
+            updates["documents_metadata"] = req.documents_metadata
         if req.is_pinned is not None:
             updates["is_pinned"] = req.is_pinned
         result = (
