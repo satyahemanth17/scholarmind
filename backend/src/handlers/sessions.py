@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from supabase import create_client, Client
 import os
+import traceback
 
 app = FastAPI()
 
@@ -100,6 +101,8 @@ async def update_session(session_id: str, req: UpdateSessionRequest):
         )
         return JSONResponse(result.data[0] if result.data else {})
     except Exception as e:
+        print(f"[sessions] PUT /sessions/{session_id} ERROR: {e}")
+        traceback.print_exc()
         return JSONResponse({"error": str(e)}, status_code=500)
 
 

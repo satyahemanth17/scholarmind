@@ -570,9 +570,13 @@ export default function Home() {
                     data={activeDocId ? (graphCache[activeDocId] ?? null) : null}
                     loading={graphLoading}
                     onNodeClick={(label) => {
-                      console.log('[ScholarMind] NODE CLICK received in page.tsx, label:', label, 'docs:', docs.length);
-                      setActiveTab('chat');
-                      setPendingNodeMessage(`Explain "${label}" in detail`);
+                      console.log('STEP 1: node clicked, label:', label)
+                      console.log('STEP 2: docs count:', docs.length)
+                      console.log('STEP 3: setting active tab to chat')
+                      setActiveTab('chat')
+                      console.log('STEP 4: setting pending message')
+                      setPendingNodeMessage(`Explain "${label}" in detail`)
+                      console.log('STEP 5: done')
                     }}
                   />
                 </div>

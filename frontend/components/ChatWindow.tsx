@@ -79,6 +79,7 @@ export default function ChatWindow({
   const titleMenuRef = useRef<HTMLDivElement>(null);
   const sendingRef = useRef(false);
   const messagesRef = useRef<Message[]>([]);
+  const processingNodeRef = useRef(false);
 
   const initials = username ? username.slice(0, 2).toUpperCase() : 'U';
   const hasDoc = docs.length > 0;
@@ -91,6 +92,7 @@ export default function ChatWindow({
 
   // Load messages when sessionId changes
   useEffect(() => {
+    if (processingNodeRef.current) return;
     if (!sessionId) {
       messagesRef.current = [];
       setMessages([]);
@@ -206,7 +208,14 @@ export default function ChatWindow({
   // Explicitly adds the user bubble FIRST (via ref, synchronously), then calls the API.
   // This avoids the React batching race condition in the pendingMessage → sendMessage path.
   useEffect(() => {
-    if (!pendingNodeMessage || loading || !hasDoc || sendingRef.current) return;
+    console.log('EFFECT RUNS:', {
+      pendingNodeMessage,
+      loading,
+      hasDoc,
+      sendingRef: sendingRef.current,
+      docsLength: docs.length
+    })
+    if (!pendingNodeMessage || loading || sendingRef.current) return;
     onNodeMessageConsumed?.();
 
     const query = pendingNodeMessage;
@@ -217,6 +226,7 @@ export default function ChatWindow({
     // Step 1: add user bubble immediately and synchronously update the ref
     const withUser: Message[] = [...baseMessages, { role: 'user' as const, content: query }];
     messagesRef.current = withUser;
+    processingNodeRef.current = true;
     setMessages(withUser);
 
     // First message in session: set title
@@ -226,9 +236,10 @@ export default function ChatWindow({
     }
 
     // Step 2: call API and append assistant response
+    const docIds = docs.length > 0 ? docs.map((d) => d.documentId) : [];
     sendingRef.current = true;
     setLoading(true);
-    queryDocuments(query, userId, docs.map((d) => d.documentId))
+    queryDocuments(query, userId, docIds)
       .then((result) => {
         const draft: Draft = { content: result.answer, citations: result.citations };
         setMessages((prev) => [
@@ -246,6 +257,7 @@ export default function ChatWindow({
       .finally(() => {
         setLoading(false);
         sendingRef.current = false;
+        processingNodeRef.current = false;
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingNodeMessage]);
